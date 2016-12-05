@@ -1,3 +1,12 @@
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+
+import org.apache.commons.math3.util.CombinatoricsUtils;
+
 import gurobi.GRB;
 import gurobi.GRBConstr;
 import gurobi.GRBEnv;
@@ -5,22 +14,12 @@ import gurobi.GRBException;
 import gurobi.GRBLinExpr;
 import gurobi.GRBModel;
 import gurobi.GRBVar;
-
-import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.PriorityQueue;
-
 import model.HubComb;
 import model.Node;
 import model.NodeList;
 import model.Route;
 import model.RoutingTree;
-
-import org.apache.commons.math3.util.CombinatoricsUtils;
+import model.RoutingTreeNode;
 
 public class RphndCvfExact{
 	// private static final double[][] coordinates =
@@ -32,7 +31,7 @@ public class RphndCvfExact{
 	private static double[][] flows;
 	private static  double[][] fixedCosts;
 	private static int P;
-	private static int D; // maximum number of failures
+	private static int L; // maximum number of failures
 	private static double alpha ;
 	private static long M ;
 	private static ArrayList<Node> nodes;
@@ -40,24 +39,24 @@ public class RphndCvfExact{
 	private static List<HubComb> hubCombs;
 
 	public static void main(String[] args) throws GRBException, IOException {
-		String path = "D:/results_103016/";
+		String path = "C:/Gurobi_Results/120416/";
 		File file = new File(path + "results.txt");
 		FileWriter fw = new FileWriter(file);
 		
-		int[] Instance = {0};
+		/*int[] Instance = {0};
 		int[] N = {20};
 		int[] hub = {5};
 		double[] discount = {0.2};
 		String[] failure = {
 				"01-05",
-				//"05-10",
-				//"10-15",
-				//"15-20",
-//				"20-25",
-				//"01-10",
-				//"01-15",
-				//"01-20",
-//				"01-25"				
+				"05-10",
+				"10-15",
+				"15-20",
+				"20-25",
+				"01-10",
+				"01-15",
+				"01-20",
+				"01-25"				
 		};
 		int[] L = {2}; 
 		
@@ -74,22 +73,21 @@ public class RphndCvfExact{
 					}
 				}
 			}
-		}
-//		fw.append(run(15, 5, 0.2, "20-25", 0, 4) + "\r\n");
-		//15,5,0.2,20-25,0,Obj:,491905.01511973643,hubs:,y0 y1 y4 y6 y14 ,Solution Time:,52899.0,Build Time:,3109.0
+		}*/
+		fw.append(run(15, 3, 0.2, "20-25", 0, 4) + "\r\n");
 		fw.close();
 	}
 	
 	
 	private static String run(int N, int hub, double discount, String failure, int l, int instance) throws GRBException, IOException {
 		double startTime = System.currentTimeMillis();
-		failures = MyArray.read("Datasets/ExperimentData2/Failures/" + failure + "/failures.txt");
-		distances = MyArray.read("Datasets/ExperimentData2/" + N + "nodes/distances_" + N + "_" + instance + ".txt");
+		failures = MyArray.read("Failures.txt");
+		distances = MyArray.read("Distances.txt");
 		nVar = distances.length;
-		flows = MyArray.read("Datasets/ExperimentData2/" + N + "nodes/Flows" + N + "_" + instance + ".txt");
-		fixedCosts = MyArray.read("Datasets/ExperimentData2/fixedcharge.txt");
+		flows = MyArray.read("Flows.txt");
+		fixedCosts = MyArray.read("Fixedcharge.txt");
 		P = hub;
-		D = l; // maximum number of failures
+		L = l; // maximum number of failures
 		alpha = discount;
 		M = CombinatoricsUtils.binomialCoefficient(
 				nVar - 1, P - 1); // big M
@@ -99,8 +97,11 @@ public class RphndCvfExact{
 		
 		// build Gurobi model and environment.
 		GRBEnv env = new GRBEnv(null);
+		
+		
 		//env.set(	GRB.IntParam.OutputFlag , 0);
 		GRBModel model = new GRBModel(env);
+		
 		// initializing node objects.
 		GRBVar[] y = new GRBVar[nVar];
 		for (int i = 0; i < nVar; i++) {
@@ -112,6 +113,7 @@ public class RphndCvfExact{
 		// initializing hub combinations.
 		generateHubCombs(nodes, P, hubCombs, fixedCosts);
 
+		
 		// mapping node indexes to hub combinations
 		HashMap<Integer, ArrayList<HubComb>> map = new HashMap<Integer, ArrayList<HubComb>>();
 		for (int i = 0; i < nVar; i++)
@@ -129,7 +131,7 @@ public class RphndCvfExact{
 			for (int j = i + 1; j < nVar; j++) {
 				for (int k = 0; k < hubCombs.size(); k++) {
 					routingTrees[i][j][k] = getRoutingTree(nodes.get(i),
-							nodes.get(j), hubCombs.get(k).hubs, D);
+							nodes.get(j), hubCombs.get(k).hubs, L);
 					x[i][j][k] = model.addVar(0, 1, flows[i][j]
 							* routingTrees[i][j][k].value, GRB.CONTINUOUS, "x"
 							+ i + "_" + j + "_" + k);
@@ -218,124 +220,56 @@ public class RphndCvfExact{
 
 	private static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
 			int l) {
+		double bestRTValue = GRB.INFINITY;
+		RoutingTree bestRT;
 		// Update the nodes in the hubsList by setting the isHub to true
 		for (Node n : hList)
 			n.isHub = true;
 
-		// instantiating the output
-		RoutingTree output = new RoutingTree((int) Math.pow(2, l + 1) - 1);
-
 		// generating list of feasible routes between the origin and the
 		// destination.
-		PriorityQueue<Route> feasibleRoutes = new PriorityQueue<Route>();
-		if (i.isHub && j.isHub) {
-			if (routes[i.ID][i.ID][j.ID][j.ID] == null)
-				routes[i.ID][i.ID][j.ID][j.ID] = new Route(i, i, j, j,
-						distances, alpha);
-			feasibleRoutes.add(routes[i.ID][i.ID][j.ID][j.ID]);
-		} else if (i.isHub) {
-			for (Node n : hList) {
-				if (routes[i.ID][i.ID][n.ID][j.ID] == null)
-					routes[i.ID][i.ID][n.ID][j.ID] = new Route(i, i, n, j,
-							distances, alpha);
-				feasibleRoutes.add(routes[i.ID][i.ID][n.ID][j.ID]);
+		ArrayList<Route> feasibleRoutes = RoutingTree.getFeasibleRoutes(i, j, hList, routes, distances, alpha);
+		
+		// instantiating unexplored RoutingTreeNodes
+		ArrayList<RoutingTree> unexploredNodes = new ArrayList<RoutingTree>();
+
+		// initializing a RoutingTreeNode for each feasible route.
+		for (Route r : feasibleRoutes){
+			RoutingTree rt = new RoutingTree(new ArrayList<Route>(), r, feasibleRoutes, L);
+			unexploredNodes.add( rt );
+		}
+		
+		while (!unexploredNodes.isEmpty()) {
+			RoutingTree currentNode = unexploredNodes.get(unexploredNodes.size()-1);
+			unexploredNodes.remove(unexploredNodes.size()-1);
+			
+			if (currentNode.value < bestRTValue){
+				bestRTValue = currentNode.value;
+				bestRT = currentNode;
 			}
-		} else if (j.isHub) {
-			for (Node n : hList) {
-				if (routes[i.ID][n.ID][j.ID][j.ID] == null)
-					routes[i.ID][n.ID][j.ID][j.ID] = new Route(i, n, j, j,
-							distances, alpha);
-				feasibleRoutes.add(routes[i.ID][n.ID][j.ID][j.ID]);
-			}
-		} else {
-			for (int u = 0; u < hList.size(); u++) {
-				for (int v = u; v < hList.size(); v++) {
-					if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] == null
-							&& routes[i.ID][hList.get(v).ID][hList.get(u).ID][j.ID] == null) {
-						Route r1 = new Route(i, hList.get(u), hList.get(v), j,
-								distances, alpha);
-						Route r2 = new Route(i, hList.get(v), hList.get(u), j,
-								distances, alpha);
-						if (r1.value <= r2.value) {
-							routes[r1.i.ID][r1.k.ID][r1.m.ID][r1.j.ID] = r1;
-							feasibleRoutes.add(r1);
-						} else {
-							routes[r2.i.ID][r2.k.ID][r2.m.ID][r2.j.ID] = r2;
-							feasibleRoutes.add(r2);
-						}
-					} else if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] != null) {
-						feasibleRoutes.add(routes[i.ID][hList.get(u).ID][hList
-								.get(v).ID][j.ID]);
-					} else /*
-							 * if (
-							 * !routes[i.ID][hList.get(v).ID][hList.get(u).ID
-							 * ][j.ID].equals(null) )
-							 */{
-						feasibleRoutes.add(routes[i.ID][hList.get(v).ID][hList
-								.get(u).ID][j.ID]);
-					}
-				}
+				
+			if (!currentNode.complete){
+				//
 			}
 		}
 
-		int cntr = 0; // counter
+		
+		
+		
+		
+		
+		
+		
+		
+		/*int cntr = 0; // counter
 		int lastIndex = (int) (Math.pow(2, l) - 2); // the last index of the
 													// second last level of the
-													// tree
 
 		Route selectedRoute = feasibleRoutes.poll();
-		output.routes[0] = selectedRoute;
+		Object[] test = feasibleRoutes.toArray();
+		output.routes.get(0) = selectedRoute;
 		output.usedHubs[0] = new NodeList();
-
-		while (!feasibleRoutes.isEmpty() && cntr <= lastIndex) {
-			PriorityQueue<Route> feasibleRoutes1 = new PriorityQueue<Route>(
-					feasibleRoutes); // List of feasible routes to select left
-										// child node from.
-			PriorityQueue<Route> feasibleRoutes2 = new PriorityQueue<Route>(
-					feasibleRoutes); // List of feasible routes to select right
-										// child node from.
-
-			if (output.routes[cntr] != null
-					&& !output.routes[cntr].i.equals(output.routes[cntr].k)
-					&& !isFinal(output.routes[cntr])) {
-				ArrayList<Node> usedHubs1 = new ArrayList<Node>(
-						output.usedHubs[cntr].list); // make a list of parent
-														// node's used hubs.
-				usedHubs1.add(output.routes[cntr].k); // adding parent node's
-														// first hub to the list
-				int leftNodeIndex = 2 * cntr + 1;
-				while (output.routes[leftNodeIndex] == null) {
-					selectedRoute = feasibleRoutes1.poll();
-
-					if (!usedHubs1.contains(selectedRoute.k)
-							&& !usedHubs1.contains(selectedRoute.m)) {
-						output.routes[2 * cntr + 1] = selectedRoute;
-						output.usedHubs[2 * cntr + 1] = new NodeList(usedHubs1);
-					}
-				}
-			}
-
-			if (output.routes[cntr] != null
-					&& !output.routes[cntr].j.equals(output.routes[cntr].m)					
-					&& !isFinal(output.routes[cntr])
-					&& !output.routes[cntr].k.equals(output.routes[cntr].m)) {
-				ArrayList<Node> usedHubs2 = new ArrayList<Node>(
-						output.usedHubs[cntr].list); // make a list of parent
-														// node's used hubs.
-				usedHubs2.add(output.routes[cntr].m); // adding parent node's
-														// first hub to the list
-				int rightNodeIndex = 2 * cntr + 2;
-				while (output.routes[rightNodeIndex] == null) {
-					selectedRoute = feasibleRoutes2.poll();
-					if (!usedHubs2.contains(selectedRoute.k)
-							&& !usedHubs2.contains(selectedRoute.m)) {
-						output.routes[2 * cntr + 2] = selectedRoute;
-						output.usedHubs[2 * cntr + 2] = new NodeList(usedHubs2);
-					}
-				}
-			}
-			cntr++;
-		}
+		
 
 		// switching node is hubList back to spokes
 		for (Node n : hList)
@@ -343,8 +277,8 @@ public class RphndCvfExact{
 
 		// updating the value of the tree
 		output.updateValue();
-
-		return output;
+*/
+		return new RoutingTree(feasibleRoutes, feasibleRoutes.get(0),feasibleRoutes, L);
 	}
 
 	private static boolean isFinal(Route r) {
