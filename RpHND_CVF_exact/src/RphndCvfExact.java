@@ -1,9 +1,11 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.ObjectInputStream.GetField;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.PriorityQueue;
 
 import org.apache.commons.math3.util.CombinatoricsUtils;
 
@@ -73,7 +75,7 @@ public class RphndCvfExact{
 				}
 			}
 		}*/
-		run(15, 3, 0.2, "20-25", 1, 4);
+		run(15, 3, 0.2, "20-25", 2, 4);
 //		fw.append(run(15, 3, 0.2, "20-25", 0, 4) + "\r\n");
 //		fw.close();
 	}
@@ -122,24 +124,25 @@ public class RphndCvfExact{
 			for (Node n : h.hubs)
 				map.get(n.ID).add(h);
 		}
-
+		int ctr = 0;
 		// initializing routing tree variables.
 		GRBVar[][][] x = new GRBVar[nVar][nVar][hubCombs.size()];
 		RoutingTree[][][] routingTrees = new RoutingTree[nVar][nVar][hubCombs
 				.size()];
-		/*for (int i = 0; i < nVar; i++) {
+		for (int i = 0; i < nVar; i++) {
 			for (int j = i + 1; j < nVar; j++) {
 				for (int k = 0; k < hubCombs.size(); k++) {
-					routingTrees[i][j][k] = getRoutingTree(nodes.get(i),
+					routingTrees[i][j][k] = getRoutingTree2(nodes.get(i),
 							nodes.get(j), hubCombs.get(k).hubs, L);
+					System.out.println(i+"_"+j+"_"+k+" : " + routingTrees[i][j][k].value);
 					x[i][j][k] = model.addVar(0, 1, flows[i][j]
 							* routingTrees[i][j][k].value, GRB.CONTINUOUS, "x"
-							+ i + "_" + j + "_" + k);
+							+ i + "_" + j + "_" + k);ctr++;
 				}
 			}
-		}*/
-		routingTrees[0][5][2] = getRoutingTree(nodes.get(0),
-				nodes.get(5), hubCombs.get(2).hubs, L);
+		}
+		System.out.println("Routing trees generated! " + ctr);
+		System.out.println(routingTrees[8][9][116]);
 		model.update();
 
 		// Adding constrains
@@ -219,17 +222,16 @@ public class RphndCvfExact{
 		return output;		
 	}
 
-	private static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
+	private static RoutingTree getRoutingTree2(Node i, Node j, List<Node> hList,
 			int l) {
 		double bestRTValue = GRB.INFINITY;
-		RoutingTree bestRT;
+		RoutingTree bestRT = new RoutingTree((int) Math.pow(2, l + 1) - 1);
 		
 		// Update the nodes in the hubsList by setting the isHub to true
 		for (Node n : hList)
 			n.isHub = true;
 
-		// generating list of feasible routes between the origin and the
-		// destination.
+		// generating list of feasible routes between the origin and the destination.
 		ArrayList<Route> feasibleRoutes = RoutingTree.getFeasibleRoutes(i, j, hList, routes, distances, alpha);
 		
 		// instantiating unexplored RoutingTreeNodes
@@ -237,21 +239,20 @@ public class RphndCvfExact{
 
 		// initializing a RoutingTreeNode for each feasible route.
 		for (Route r : feasibleRoutes){
-			RoutingTree rt = new RoutingTree(new ArrayList<Route>(), r, feasibleRoutes, L);
-			if (!rt.complete && !rt.pruned)
-				unexploredNodes.add( rt );
+			RoutingTree rt = new RoutingTree(new Route[(int) Math.pow(2, l + 1) - 1], r, feasibleRoutes, L);
+			if (rt.complete ){
+				if ( rt.value < bestRTValue ){
+					bestRT = rt;
+					bestRTValue = bestRT.value;
+				}
+			}else if (!rt.pruned)
+				unexploredNodes.add(rt);
 		}
 		
 		while (!unexploredNodes.isEmpty()) {
 			RoutingTree currentNode = unexploredNodes.get(unexploredNodes.size()-1);
 			unexploredNodes.remove(unexploredNodes.size()-1);
 			
-			// updating best routing tree found so far.
-			if (currentNode.complete && currentNode.value < bestRTValue){
-				bestRTValue = currentNode.value;
-				bestRT = currentNode;
-			}
-				
 			if (!currentNode.complete){
 				int childNodeInd = currentNode.unexploredNodes.get(0); 
 				int parentNodeInd = (int) Math.floor((childNodeInd-1)/2);
@@ -262,36 +263,102 @@ public class RphndCvfExact{
 				
 				ArrayList<Route> avlRoutes = currentNode.availableRoutes.get(parentNodeInd);
 				if ( flag.equals("left") ){
-					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes.get(parentNodeInd).k );
+					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes[parentNodeInd].k );
 				}else {
-					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes.get(parentNodeInd).m );
+					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes[parentNodeInd].m );
 				}
 				for (Route r : avlRoutes){
 					RoutingTree rt = new RoutingTree(currentNode,childNodeInd,r,avlRoutes,L);
-					if (!!rt.complete && !rt.pruned)
+					// Check for the best value and the best routing-tree 
+					if (rt.complete ){
+						if ( rt.value < bestRTValue ){
+							bestRT = rt;
+							bestRTValue = bestRT.value;
+						}
+					}else if (!rt.pruned)
 						unexploredNodes.add(rt);
 				}
-				currentNode.unexploredNodes.remove(0);
 			}
+			
 		}
+		// switching node is hubList back to spokes
+		for (Node n : hList)
+			n.isHub = false;
+		
+		return bestRT;
+	}
 
-		
-		
-		
-		
-		
-		
-		
-		
-		/*int cntr = 0; // counter
+	private static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
+			int l) {
+		// Update the nodes in the hubsList by setting the isHub to true
+		for (Node n : hList)
+			n.isHub = true;
+
+		// instantiating the output
+		RoutingTree output = new RoutingTree((int) Math.pow(2, l + 1) - 1);
+
+		// generating list of feasible routes between the origin and the
+		// destination.
+		PriorityQueue<Route> feasibleRoutes = RoutingTree.getFeasibleRoutes2(i, j, hList, routes, distances, alpha);
+
+		int cntr = 0; // counter
 		int lastIndex = (int) (Math.pow(2, l) - 2); // the last index of the
 													// second last level of the
+													// tree
 
 		Route selectedRoute = feasibleRoutes.poll();
-		Object[] test = feasibleRoutes.toArray();
-		output.routes.get(0) = selectedRoute;
-		output.usedHubs[0] = new NodeList();
-		
+		output.routes[0] = selectedRoute;
+		output.usedHubs.put(0, new ArrayList<Node>()); 
+
+		while (!feasibleRoutes.isEmpty() && cntr <= lastIndex) {
+			PriorityQueue<Route> feasibleRoutes1 = new PriorityQueue<Route>(
+					feasibleRoutes); // List of feasible routes to select left
+										// child node from.
+			PriorityQueue<Route> feasibleRoutes2 = new PriorityQueue<Route>(
+					feasibleRoutes); // List of feasible routes to select right
+										// child node from.
+
+			if (output.routes[cntr] != null
+					&& !output.routes[cntr].i.equals(output.routes[cntr].k)
+					&& !isFinal(output.routes[cntr])) {
+				ArrayList<Node> usedHubs1 = new ArrayList<Node>(
+						output.usedHubs.get(cntr)); // make a list of parent
+														// node's used hubs.
+				usedHubs1.add(output.routes[cntr].k); // adding parent node's
+														// first hub to the list
+				int leftNodeIndex = 2 * cntr + 1;
+				while (output.routes[leftNodeIndex] == null) {
+					selectedRoute = feasibleRoutes1.poll();
+
+					if (!usedHubs1.contains(selectedRoute.k)
+							&& !usedHubs1.contains(selectedRoute.m)) {
+						output.routes[2 * cntr + 1] = selectedRoute;
+						output.usedHubs.put(2 * cntr + 1,usedHubs1);
+					}
+				}
+			}
+
+			if (output.routes[cntr] != null
+					&& !output.routes[cntr].j.equals(output.routes[cntr].m)					
+					&& !isFinal(output.routes[cntr])
+					&& !output.routes[cntr].k.equals(output.routes[cntr].m)) {
+				ArrayList<Node> usedHubs2 = new ArrayList<Node>(
+						output.usedHubs.get(cntr)); // make a list of parent
+														// node's used hubs.
+				usedHubs2.add(output.routes[cntr].m); // adding parent node's
+														// first hub to the list
+				int rightNodeIndex = 2 * cntr + 2;
+				while (output.routes[rightNodeIndex] == null) {
+					selectedRoute = feasibleRoutes2.poll();
+					if (!usedHubs2.contains(selectedRoute.k)
+							&& !usedHubs2.contains(selectedRoute.m)) {
+						output.routes[2 * cntr + 2] = selectedRoute;
+						output.usedHubs.put(2 * cntr + 2, usedHubs2);
+					}
+				}
+			}
+			cntr++;
+		}
 
 		// switching node is hubList back to spokes
 		for (Node n : hList)
@@ -299,10 +366,11 @@ public class RphndCvfExact{
 
 		// updating the value of the tree
 		output.updateValue();
-*/
-		return new RoutingTree(feasibleRoutes, feasibleRoutes.get(0),feasibleRoutes, L);
+
+		return output;
 	}
 
+	
 	private static boolean isFinal(Route r) {
 		boolean output = false;
 		if (r.k.equals(r.m)) {
