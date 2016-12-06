@@ -19,7 +19,6 @@ import model.Node;
 import model.NodeList;
 import model.Route;
 import model.RoutingTree;
-import model.RoutingTreeNode;
 
 public class RphndCvfExact{
 	// private static final double[][] coordinates =
@@ -39,9 +38,9 @@ public class RphndCvfExact{
 	private static List<HubComb> hubCombs;
 
 	public static void main(String[] args) throws GRBException, IOException {
-		String path = "C:/Gurobi_Results/120416/";
-		File file = new File(path + "results.txt");
-		FileWriter fw = new FileWriter(file);
+//		String path = "C:/Gurobi_Results/120416/";
+//		File file = new File(path + "results.txt");
+//		FileWriter fw = new FileWriter(file);
 		
 		/*int[] Instance = {0};
 		int[] N = {20};
@@ -74,8 +73,9 @@ public class RphndCvfExact{
 				}
 			}
 		}*/
-		fw.append(run(15, 3, 0.2, "20-25", 0, 4) + "\r\n");
-		fw.close();
+		run(15, 3, 0.2, "20-25", 1, 4);
+//		fw.append(run(15, 3, 0.2, "20-25", 0, 4) + "\r\n");
+//		fw.close();
 	}
 	
 	
@@ -127,7 +127,7 @@ public class RphndCvfExact{
 		GRBVar[][][] x = new GRBVar[nVar][nVar][hubCombs.size()];
 		RoutingTree[][][] routingTrees = new RoutingTree[nVar][nVar][hubCombs
 				.size()];
-		for (int i = 0; i < nVar; i++) {
+		/*for (int i = 0; i < nVar; i++) {
 			for (int j = i + 1; j < nVar; j++) {
 				for (int k = 0; k < hubCombs.size(); k++) {
 					routingTrees[i][j][k] = getRoutingTree(nodes.get(i),
@@ -137,8 +137,9 @@ public class RphndCvfExact{
 							+ i + "_" + j + "_" + k);
 				}
 			}
-		}
-
+		}*/
+		routingTrees[0][5][2] = getRoutingTree(nodes.get(0),
+				nodes.get(5), hubCombs.get(2).hubs, L);
 		model.update();
 
 		// Adding constrains
@@ -222,6 +223,7 @@ public class RphndCvfExact{
 			int l) {
 		double bestRTValue = GRB.INFINITY;
 		RoutingTree bestRT;
+		
 		// Update the nodes in the hubsList by setting the isHub to true
 		for (Node n : hList)
 			n.isHub = true;
@@ -236,20 +238,40 @@ public class RphndCvfExact{
 		// initializing a RoutingTreeNode for each feasible route.
 		for (Route r : feasibleRoutes){
 			RoutingTree rt = new RoutingTree(new ArrayList<Route>(), r, feasibleRoutes, L);
-			unexploredNodes.add( rt );
+			if (!rt.complete && !rt.pruned)
+				unexploredNodes.add( rt );
 		}
 		
 		while (!unexploredNodes.isEmpty()) {
 			RoutingTree currentNode = unexploredNodes.get(unexploredNodes.size()-1);
 			unexploredNodes.remove(unexploredNodes.size()-1);
 			
-			if (currentNode.value < bestRTValue){
+			// updating best routing tree found so far.
+			if (currentNode.complete && currentNode.value < bestRTValue){
 				bestRTValue = currentNode.value;
 				bestRT = currentNode;
 			}
 				
 			if (!currentNode.complete){
-				//
+				int childNodeInd = currentNode.unexploredNodes.get(0); 
+				int parentNodeInd = (int) Math.floor((childNodeInd-1)/2);
+				
+				String flag = "left";
+				if ( childNodeInd % 2 == 0)
+					flag = "right";
+				
+				ArrayList<Route> avlRoutes = currentNode.availableRoutes.get(parentNodeInd);
+				if ( flag.equals("left") ){
+					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes.get(parentNodeInd).k );
+				}else {
+					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes.get(parentNodeInd).m );
+				}
+				for (Route r : avlRoutes){
+					RoutingTree rt = new RoutingTree(currentNode,childNodeInd,r,avlRoutes,L);
+					if (!!rt.complete && !rt.pruned)
+						unexploredNodes.add(rt);
+				}
+				currentNode.unexploredNodes.remove(0);
 			}
 		}
 

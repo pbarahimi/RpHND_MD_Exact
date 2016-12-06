@@ -1,23 +1,87 @@
 package model;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 
 public class RoutingTree {
 	public ArrayList<Route> routes = new ArrayList<Route>();
-	public ArrayList<NodeList> usedHubs;
-	public ArrayList<Route> availableRoutes;
+	public HashMap<Integer,ArrayList<Integer>> usedHubs = new HashMap<Integer, ArrayList<Integer>>();
+	public HashMap<Integer,ArrayList<Route>> availableRoutes = new HashMap<Integer, ArrayList<Route>>();
+	public ArrayList<Integer> unexploredNodes = new ArrayList<Integer>(); 
 	public double value;
-	public boolean complete = false;
+	public boolean complete = false; // once the length of the routes attribute reaches the maximum number nodes in a tree (either with routes or null values as nodes), the routing tree is complete.
+	public boolean pruned = false;  // if the value of the tree is worse than the upper bound, the tree will be pruned eventhough it might not be complete.
 	
-	public RoutingTree (ArrayList<Route> routes, Route newRoute, ArrayList<Route> availableRoutes, int L) {
-		this.routes.add(newRoute);
-		this.availableRoutes = availableRoutes;
+	// Constructor 1
+	@SuppressWarnings("unchecked")
+	public RoutingTree (ArrayList<Route> routes, Route newRoute, ArrayList<Route> avlRoutes, int L) {
+		this.unexploredNodes.add(0);
+		this.availableRoutes.put(0, (ArrayList<Route>) avlRoutes.clone() );
+		addRoute(newRoute);
 		updateValue();
+		
 		// check if the tree is completed, according to the required depth.
-		if ( routes.size() >= Math.pow(2, L+1)-2 )
+		if ( this.unexploredNodes.isEmpty() || this.routes.size() >= Math.pow(2, L+1)-2 )
 			this.complete = true;
 	};
+	
+	// Constructor 2
+	public RoutingTree (RoutingTree rt, int newNodeInd, Route newRoute, ArrayList<Route> avlRoutes, int L){
+		this.routes = rt.routes;
+		this.usedHubs = rt.usedHubs;
+		this.availableRoutes  = rt.availableRoutes;
+		this.unexploredNodes = rt.unexploredNodes;	
+		this.availableRoutes.put(newNodeInd, avlRoutes);
+		this.usedHubs.put(newNodeInd, this.usedHubs.get((int) Math.floor((newNodeInd - 1)/2)) );
+		updateUsedHubs();
+		addRoute(newRoute);
+		updateValue();
+		
+		// check if the tree is completed, according to the required depth.
+		if ( this.unexploredNodes.isEmpty() || this.routes.size() >= Math.pow(2, L+1)-2 )
+			this.complete = true;
+	}
+	
+	private void updateUsedHubs(){
+		
+	}
+	
+	private void addRoute(Route r){
+		int index = unexploredNodes.get(0);
+		unexploredNodes.remove(0);
+		availableRoutes.get(index).remove(r);
+		if (index == 0)
+			this.routes.add(r);
+		else{
+			try{
+				this.routes.set(index, r);
+			}catch(IndexOutOfBoundsException e){
+				for (int i = this.routes.size() ; i < index ; i++)
+					this.routes.add(null);
+				this.routes.add(r);
+			}
+		}
+		
+		// See the index to find the left and right child indices and add to the unexplored list. 		
+		// check whether the new route needs backups
+		if ( !r.k.equals(r.m) ) {
+			if ( r.i.equals(r.k) && !r.j.equals(r.m)) //iimj
+				this.unexploredNodes.add(2*index+2);
+			else if ( !r.i.equals(r.k) && r.j.equals(r.m) )  //ikjj
+				this.unexploredNodes.add(2*index+1);
+			else if ( !r.i.equals(r.k) && !r.j.equals(r.m) ){ //ikmj
+				this.unexploredNodes.add(2*index+1);
+				this.unexploredNodes.add(2*index+2);
+			}
+			else {} //iijj
+			
+		} else {
+			if ( !r.i.equals(r.k) && !r.j.equals(r.m) ) //ikkj
+				this.unexploredNodes.add(2*index+1);
+			else {} //iiij or ijjj
+		}
+	}
 	
 	public RoutingTree (RoutingTree other) {
 		this.routes = other.routes;
@@ -37,8 +101,8 @@ public class RoutingTree {
 	
 	private double getFailureProb(int i ){
 		double output = 1;
-		for ( Node n : this.usedHubs.get(i).list )
-			output *= n.failure;
+		/*for ( Node n : this.usedHubs.get(i).list )
+			output *= n.failure;*/
 		return output;
 	}
 	
