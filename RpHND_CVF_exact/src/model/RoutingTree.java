@@ -30,7 +30,7 @@ public class RoutingTree {
 		updateValue();
 		
 		// check if the tree is completed, according to the required depth.
-		if ( this.unexploredNodes.isEmpty() || this.routes.length >= Math.pow(2, L+1)-2 )
+		if ( this.unexploredNodes.isEmpty() /*|| this.routes.length >= Math.pow(2, L+1)-2*/ )
 			this.complete = true;
 	};
 	

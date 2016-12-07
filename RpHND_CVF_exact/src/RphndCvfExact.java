@@ -132,6 +132,8 @@ public class RphndCvfExact{
 		for (int i = 0; i < nVar; i++) {
 			for (int j = i + 1; j < nVar; j++) {
 				for (int k = 0; k < hubCombs.size(); k++) {
+					if (i==8 && j == 9 && k == 110)
+						System.out.println();
 					routingTrees[i][j][k] = getRoutingTree2(nodes.get(i),
 							nodes.get(j), hubCombs.get(k).hubs, L);
 					System.out.println(i+"_"+j+"_"+k+" : " + routingTrees[i][j][k].value);
