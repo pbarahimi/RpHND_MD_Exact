@@ -9,7 +9,7 @@ public class Route implements Comparable<Route>{
 	public final Node j;
 	public final double cost; // the route-cost regardless of failure probabilities
 	public final double expCost; // expected cost of the route
-	public final double value;	// the route-cost considering the failure probability of the hubs
+//	public final double value;	// the route-cost considering the failure probability of the hubs
 	public GRBVar var;
 	
 	/**
@@ -27,7 +27,6 @@ public class Route implements Comparable<Route>{
 		this.j = j;
 		this.cost = getRouteCost ( distances, alpha );
 		this.expCost = getExpCost ( alpha );
-		this.value = getValue();
 	}
 	
 	/**
@@ -41,7 +40,7 @@ public class Route implements Comparable<Route>{
 		this.m = other.m;
 		this.cost = other.cost;
 		this.expCost = other.expCost;
-		this.value = other.value;		
+//		this.value = other.value;		
 	}
 	
 	/**
@@ -62,28 +61,13 @@ public class Route implements Comparable<Route>{
 	
 	private double getExpCost ( double alpha ){
 		double output = this.cost;
-		/*if ( !k.equals(m) ) {
-			if ( i.equals(k) && !j.equals(m)) //iimj
-				output *= (1-i.failure) * (1-m.failure) * (1-j.failure);
-			else if ( !i.equals(k) && j.equals(m) )  //ikjj
-				output *= (1-i.failure) * (1-k.failure) * (1-j.failure);
-			else if ( !i.equals(k) && !j.equals(m) ) //ikmj
-				output *= (1-i.failure) * (1-k.failure) * (1-m.failure) *(1-j.failure);
-			else //iijj
-				output *= (1-i.failure) * (1-j.failure);
-		} else {
-			if ( !i.equals(k) && !j.equals(m) ) //ikkj
-				output *= (1-i.failure) * (1-k.failure) * (1-j.failure);
-			else //iiij or ijjj
-				output *= (1-i.failure) * (1-j.failure);
-		}*/
 		if ( !k.equals(m) ) {
 			if ( i.equals(k) && !j.equals(m)) //iimj
 				output *= 1 - m.failure;
 			else if ( !i.equals(k) && j.equals(m) )  //ikjj
 				output *= 1 - k.failure;
 			else if ( !i.equals(k) && !j.equals(m) ) //ikmj
-				output *= 1 - k.failure * m.failure;
+				output *= 1 - k.failure - m.failure;
 			else //iijj
 				output *= 1;
 		} else {
@@ -108,26 +92,6 @@ public class Route implements Comparable<Route>{
 		return coefficient * distances[n1.ID][n2.ID];//(Math.sqrt(Math.pow(n1.x - n2.x, 2) + Math.pow(n1.y - n2.y, 2)));
 	}
 	
-	private double getValue(){
-		/*double output = this.cost;
-		if ( !k.equals(m) ) {
-			if ( i.equals(k) && !j.equals(m)) //iimj
-				output *= m.failure;
-			else if ( !i.equals(k) && j.equals(m) )  //ikjj
-				output *= k.failure;
-			else if ( !i.equals(k) && !j.equals(m) ) //ikmj
-				output *= k.failure + m.failure;
-			else //iijj
-				output *= 0.0001;
-		} else {
-			if ( !i.equals(k) && !j.equals(m) ) //ikkj
-				output *= k.failure;
-			else //iiij or ijjj
-				output *= 0.0001;
-		}*/
-		return this.expCost;
-	}
-	
 	@Override
 	public String toString(){
 		return "(" + this.i + "," + this.k + "," + this.m + "," + this.j + ") - " + this.cost +/* "-" + this.value + */"-" +this.expCost;
@@ -135,9 +99,9 @@ public class Route implements Comparable<Route>{
 	
 	@Override
 	public int compareTo (Route other){
-		if ( this.value < other.value )
+		if ( this.expCost < other.expCost )
 			return -1;
-		else if ( this.value > other.value )
+		else if ( this.expCost > other.expCost )
 			return 1;
 		else 
 			return 0;

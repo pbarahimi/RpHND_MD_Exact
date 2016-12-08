@@ -10,6 +10,7 @@ import java.util.PriorityQueue;
 import org.apache.commons.math3.util.CombinatoricsUtils;
 
 import gurobi.GRB;
+import gurobi.GRB.DoubleAttr;
 import gurobi.GRBConstr;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
@@ -40,26 +41,26 @@ public class RphndCvfExact{
 	private static List<HubComb> hubCombs;
 
 	public static void main(String[] args) throws GRBException, IOException {
-//		String path = "C:/Gurobi_Results/120416/";
-//		File file = new File(path + "results.txt");
-//		FileWriter fw = new FileWriter(file);
+		File file = new File("results.txt");
+		file.mkdir();
+		FileWriter fw = new FileWriter("test.txt");
 		
-		/*int[] Instance = {0};
-		int[] N = {20};
+		int[] Instance = {0};
+		int[] N = {10};
 		int[] hub = {5};
 		double[] discount = {0.2};
 		String[] failure = {
 				"01-05",
-				"05-10",
-				"10-15",
-				"15-20",
-				"20-25",
-				"01-10",
-				"01-15",
-				"01-20",
-				"01-25"				
+//				"05-10",
+//				"10-15",
+//				"15-20",
+//				"20-25",
+//				"01-10",
+//				"01-15",
+//				"01-20",
+//				"01-25"				
 		};
-		int[] L = {2}; 
+		int[] L = {1}; 
 		
 		for (int l : L){
 			for(int n : N){
@@ -74,20 +75,18 @@ public class RphndCvfExact{
 					}
 				}
 			}
-		}*/
-		run(15, 3, 0.2, "20-25", 2, 4);
-//		fw.append(run(15, 3, 0.2, "20-25", 0, 4) + "\r\n");
-//		fw.close();
+		}
+		fw.close();
 	}
 	
 	
 	private static String run(int N, int hub, double discount, String failure, int l, int instance) throws GRBException, IOException {
 		double startTime = System.currentTimeMillis();
-		failures = MyArray.read("Failures.txt");
-		distances = MyArray.read("Distances.txt");
+		failures = MyArray.read("Datasets/CAB/Failures/" + failure + "/failures.txt");
+		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
-		flows = MyArray.read("Flows.txt");
-		fixedCosts = MyArray.read("Fixedcharge.txt");
+		flows = MyArray.read("Datasets/CAB/CAB" + N + "/Flows.txt");
+		fixedCosts = MyArray.read("Datasets/CAB/CAB" + N + "/fixedcharge.txt");
 		P = hub;
 		L = l; // maximum number of failures
 		alpha = discount;
@@ -101,8 +100,9 @@ public class RphndCvfExact{
 		GRBEnv env = new GRBEnv(null);
 		
 		
-		//env.set(	GRB.IntParam.OutputFlag , 0);
+		env.set(	GRB.IntParam.OutputFlag , 0);
 		GRBModel model = new GRBModel(env);
+		//model.getEnv().set(GRB.DoubleParam.TimeLimit, 5);
 		
 		// initializing node objects.
 		GRBVar[] y = new GRBVar[nVar];
@@ -132,19 +132,16 @@ public class RphndCvfExact{
 		for (int i = 0; i < nVar; i++) {
 			for (int j = i + 1; j < nVar; j++) {
 				for (int k = 0; k < hubCombs.size(); k++) {
-					if (i==8 && j == 9 && k == 110)
-						System.out.println();
-					routingTrees[i][j][k] = getRoutingTree2(nodes.get(i),
-							nodes.get(j), hubCombs.get(k).hubs, L);
-					System.out.println(i+"_"+j+"_"+k+" : " + routingTrees[i][j][k].value);
+					double RTUB = getUpperbound(nodes.get(i),
+							nodes.get(j), hubCombs.get(k).hubs, L);  // the upper bound obtained by the greedy algorithm
+					routingTrees[i][j][k] = getRoutingTree(nodes.get(i),
+							nodes.get(j), hubCombs.get(k).hubs, L, RTUB);
 					x[i][j][k] = model.addVar(0, 1, flows[i][j]
 							* routingTrees[i][j][k].value, GRB.CONTINUOUS, "x"
 							+ i + "_" + j + "_" + k);ctr++;
 				}
 			}
 		}
-		System.out.println("Routing trees generated! " + ctr);
-		System.out.println(routingTrees[8][9][116]);
 		model.update();
 
 		// Adding constrains
@@ -214,18 +211,24 @@ public class RphndCvfExact{
 				output += var.get(GRB.StringAttr.VarName)+ " ";
 			}
 		}
+
+		/*for ( int i = 0 ; i < nVar ; i++ )
+			for (int j = i+1 ; j<nVar ; j++)
+				System.out.println(routingTrees[i][j][61])*/;
+
 		System.out.print(",Solution Time:,"
 				+ (System.currentTimeMillis() - startTime));
 		System.out.println(",Build Time:," + buildTime);
 		output += ",Solution Time:,"
 				+ (System.currentTimeMillis() - startTime) + ",Build Time:," + buildTime;
+
 		model.dispose();
 		env.dispose();
 		return output;		
 	}
 
-	private static RoutingTree getRoutingTree2(Node i, Node j, List<Node> hList,
-			int l) {
+	private static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
+			int l, double UB) {
 		double bestRTValue = GRB.INFINITY;
 		RoutingTree bestRT = new RoutingTree((int) Math.pow(2, l + 1) - 1);
 		
@@ -241,8 +244,8 @@ public class RphndCvfExact{
 
 		// initializing a RoutingTreeNode for each feasible route.
 		for (Route r : feasibleRoutes){
-			RoutingTree rt = new RoutingTree(new Route[(int) Math.pow(2, l + 1) - 1], r, feasibleRoutes, L);
-			if (rt.complete ){
+			RoutingTree rt = new RoutingTree(new Route[(int) Math.pow(2, l + 1) - 1], r, feasibleRoutes, L, UB);
+			if ( rt.isComplete() ){
 				if ( rt.value < bestRTValue ){
 					bestRT = rt;
 					bestRTValue = bestRT.value;
@@ -255,7 +258,7 @@ public class RphndCvfExact{
 			RoutingTree currentNode = unexploredNodes.get(unexploredNodes.size()-1);
 			unexploredNodes.remove(unexploredNodes.size()-1);
 			
-			if (!currentNode.complete){
+			if (!currentNode.isComplete()){
 				int childNodeInd = currentNode.unexploredNodes.get(0); 
 				int parentNodeInd = (int) Math.floor((childNodeInd-1)/2);
 				
@@ -270,9 +273,9 @@ public class RphndCvfExact{
 					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes, currentNode.routes[parentNodeInd].m );
 				}
 				for (Route r : avlRoutes){
-					RoutingTree rt = new RoutingTree(currentNode,childNodeInd,r,avlRoutes,L);
+					RoutingTree rt = new RoutingTree(currentNode,childNodeInd,r,avlRoutes,L, UB);
 					// Check for the best value and the best routing-tree 
-					if (rt.complete ){
+					if (rt.isComplete() ){
 						if ( rt.value < bestRTValue ){
 							bestRT = rt;
 							bestRTValue = bestRT.value;
@@ -281,7 +284,6 @@ public class RphndCvfExact{
 						unexploredNodes.add(rt);
 				}
 			}
-			
 		}
 		// switching node is hubList back to spokes
 		for (Node n : hList)
@@ -290,7 +292,7 @@ public class RphndCvfExact{
 		return bestRT;
 	}
 
-	private static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
+	private static double getUpperbound(Node i, Node j, List<Node> hList,
 			int l) {
 		// Update the nodes in the hubsList by setting the isHub to true
 		for (Node n : hList)
@@ -369,7 +371,7 @@ public class RphndCvfExact{
 		// updating the value of the tree
 		output.updateValue();
 
-		return output;
+		return output.value;
 	}
 
 	

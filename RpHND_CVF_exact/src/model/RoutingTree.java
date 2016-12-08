@@ -11,7 +11,6 @@ public class RoutingTree {
 	public HashMap<Integer,ArrayList<Route>> availableRoutes = new HashMap<Integer, ArrayList<Route>>();
 	public ArrayList<Integer> unexploredNodes = new ArrayList<Integer>(); 
 	public double value;
-	public boolean complete = false; // once the length of the routes attribute reaches the maximum number nodes in a tree (either with routes or null values as nodes), the routing tree is complete.
 	public boolean pruned = false;  // if the value of the tree is worse than the upper bound, the tree will be pruned eventhough it might not be complete.
 	
 	// Constructor 0
@@ -21,33 +20,34 @@ public class RoutingTree {
 	
 	// Constructor 1
 	@SuppressWarnings("unchecked")
-	public RoutingTree (Route[] routes, Route newRoute, ArrayList<Route> avlRoutes, int L) {
+	public RoutingTree (Route[] routes, Route newRoute, ArrayList<Route> avlRoutes, int L, double UB) {
 		this.routes = routes.clone();
 		this.unexploredNodes.add(0);
 		this.availableRoutes.put(0, (ArrayList<Route>) avlRoutes.clone() );
 		this.usedHubs.put( 0, new ArrayList<Node>() );
-		addRoute(newRoute);
+		addRoute(newRoute, L);
 		updateValue();
-		
-		// check if the tree is completed, according to the required depth.
-		if ( this.unexploredNodes.isEmpty() /*|| this.routes.length >= Math.pow(2, L+1)-2*/ )
-			this.complete = true;
+		prune(UB);
 	};
 	
 	// Constructor 2
-	public RoutingTree (RoutingTree rt, int newNodeInd, Route newRoute, ArrayList<Route> avlRoutes, int L){
+	public RoutingTree (RoutingTree rt, int newNodeInd, Route newRoute, ArrayList<Route> avlRoutes, int L, double UB){
 		this.routes = rt.routes.clone();
 		this.usedHubs.putAll(rt.usedHubs);
 		this.availableRoutes.putAll(rt.availableRoutes);
 		this.unexploredNodes.addAll(rt.unexploredNodes);	
 		this.availableRoutes.put(newNodeInd, new ArrayList<Route>(avlRoutes) );
 		updateUsedHubs(newNodeInd);
-		addRoute(newRoute);
+		addRoute(newRoute, L);
 		updateValue();
-		
-		// check if the tree is completed, according to the required depth.
-		if ( this.unexploredNodes.isEmpty() || this.routes.length >= Math.pow(2, L+1)-2 )
-			this.complete = true;
+		prune(UB);
+			
+	}
+	
+	
+	private <T> void prune(T upperBound){
+		if ( this.value >= (double) upperBound)
+			this.pruned = true;
 	}
 	
 	private void updateUsedHubs(int newNodeInd){
@@ -63,40 +63,31 @@ public class RoutingTree {
 			this.usedHubs.get(newNodeInd).add(this.routes[parentNodeInd].k);
 	}
 	
-	private void addRoute(Route r){
+	private void addRoute(Route r, int L){
 		int index = unexploredNodes.get(0);
 		unexploredNodes.remove(0);
 		availableRoutes.get(index).remove(r);
 		this.routes[index] = r;
-		/*if (index == 0)
-			this.routes.add(r);
-		else{
-			try{
-				this.routes[index] = r;
-			}catch(IndexOutOfBoundsException e){
-				for (int i = this.routes.size() ; i < index ; i++)
-					this.routes.add(null);
-				this.routes.add(r);
-			}
-		}*/
-		
+				
 		// See the index to find the left and right child indices and add to the unexplored list. 		
 		// check whether the new route needs backups
-		if ( !r.k.equals(r.m) ) {
-			if ( r.i.equals(r.k) && !r.j.equals(r.m)) //iimj
-				this.unexploredNodes.add(2*index+2);
-			else if ( !r.i.equals(r.k) && r.j.equals(r.m) )  //ikjj
-				this.unexploredNodes.add(2*index+1);
-			else if ( !r.i.equals(r.k) && !r.j.equals(r.m) ){ //ikmj
-				this.unexploredNodes.add(2*index+1);
-				this.unexploredNodes.add(2*index+2);
+		if (index < Math.pow(2, L)-1){  // checks make sure we are not exceeding depth L
+			if ( !r.k.equals(r.m) ) {
+				if ( r.i.equals(r.k) && !r.j.equals(r.m)) //iimj
+					this.unexploredNodes.add(2*index+2);
+				else if ( !r.i.equals(r.k) && r.j.equals(r.m) )  //ikjj
+					this.unexploredNodes.add(2*index+1);
+				else if ( !r.i.equals(r.k) && !r.j.equals(r.m) ){ //ikmj
+					this.unexploredNodes.add(2*index+1);
+					this.unexploredNodes.add(2*index+2);
+				}
+				else {} //iijj
+				
+			} else {
+				if ( !r.i.equals(r.k) && !r.j.equals(r.m) ) //ikkj
+					this.unexploredNodes.add(2*index+1);
+				else {} //iiij or ijjj
 			}
-			else {} //iijj
-			
-		} else {
-			if ( !r.i.equals(r.k) && !r.j.equals(r.m) ) //ikkj
-				this.unexploredNodes.add(2*index+1);
-			else {} //iiij or ijjj
 		}
 	}
 	
@@ -105,10 +96,16 @@ public class RoutingTree {
 		this.usedHubs = other.usedHubs;
 		this.value = other.value;
 		this.availableRoutes = other.availableRoutes;
-		this.complete = other.complete;
+//		this.complete = other.complete;
 	};
 	
-	public void updateValue(){		
+	public boolean isComplete(){
+		if (this.unexploredNodes.size() ==0)
+			return true;
+		else
+			return false;
+	}
+	public void updateValue(){	
 		this.value = this.routes[0].expCost;
 		for (int i = 1 ; i < routes.length ; i++){
 			if (this.routes[i] != null)
@@ -133,6 +130,7 @@ public class RoutingTree {
 			){
 		// generating list of feasible routes between the origin and the
 				// destination.
+		
 				ArrayList<Route> feasibleRoutes = new ArrayList<Route>();
 				if (i.isHub && j.isHub) {
 					if (routes[i.ID][i.ID][j.ID][j.ID] == null)
@@ -162,7 +160,7 @@ public class RoutingTree {
 										distances, alpha);
 								Route r2 = new Route(i, hList.get(v), hList.get(u), j,
 										distances, alpha);
-								if (r1.value <= r2.value) {
+								if (r1.expCost <= r2.expCost) {
 									routes[r1.i.ID][r1.k.ID][r1.m.ID][r1.j.ID] = r1;
 									feasibleRoutes.add(r1);
 								} else {
@@ -172,11 +170,7 @@ public class RoutingTree {
 							} else if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] != null) {
 								feasibleRoutes.add(routes[i.ID][hList.get(u).ID][hList
 										.get(v).ID][j.ID]);
-							} else /*
-									 * if (
-									 * !routes[i.ID][hList.get(v).ID][hList.get(u).ID
-									 * ][j.ID].equals(null) )
-									 */{
+							} else {
 								feasibleRoutes.add(routes[i.ID][hList.get(v).ID][hList
 										.get(u).ID][j.ID]);
 							}
@@ -225,7 +219,7 @@ public class RoutingTree {
 										distances, alpha);
 								Route r2 = new Route(i, hList.get(v), hList.get(u), j,
 										distances, alpha);
-								if (r1.value <= r2.value) {
+								if (r1.expCost <= r2.expCost) {
 									routes[r1.i.ID][r1.k.ID][r1.m.ID][r1.j.ID] = r1;
 									feasibleRoutes.add(r1);
 								} else {
