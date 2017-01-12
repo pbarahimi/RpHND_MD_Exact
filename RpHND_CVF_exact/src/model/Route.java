@@ -89,7 +89,7 @@ public class Route implements Comparable<Route>{
 	private double getDistance (Node n1, Node n2, double[][] distances, double alpha ){
 		double coefficient = 1;
 		if (n1.isHub && n2.isHub) coefficient = 1 - alpha;
-		return coefficient * distances[n1.ID][n2.ID];//(Math.sqrt(Math.pow(n1.x - n2.x, 2) + Math.pow(n1.y - n2.y, 2)));
+		return coefficient * distances[n1.ID][n2.ID];
 	}
 	
 	@Override

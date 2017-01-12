@@ -1,16 +1,15 @@
 import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
-import java.io.ObjectInputStream.GetField;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 import org.apache.commons.math3.util.CombinatoricsUtils;
 
 import gurobi.GRB;
-import gurobi.GRB.DoubleAttr;
 import gurobi.GRBConstr;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
@@ -18,15 +17,13 @@ import gurobi.GRBLinExpr;
 import gurobi.GRBModel;
 import gurobi.GRBVar;
 import model.HubComb;
+import model.HubCombGenerator;
+import model.KMedoids;
 import model.Node;
-import model.NodeList;
 import model.Route;
 import model.RoutingTree;
 
 public class RphndCvfExact{
-	// private static final double[][] coordinates =
-	// MyArray.read("coordinates.txt");
-	// private static final double[][] tmpFlows = MyArray.read("w.txt");
 	private static double[][] failures;
 	private static double[][] distances;
 	private static int nVar;
@@ -39,8 +36,9 @@ public class RphndCvfExact{
 	private static ArrayList<Node> nodes;
 	private static Route[][][][] routes;
 	private static List<HubComb> hubCombs;
+	private static List<Integer> potentialHubs; 
 
-	public static void main(String[] args) throws GRBException, IOException {
+	public static void run(String[] args) throws GRBException, IOException, InterruptedException {
 		File file = new File("results.txt");
 		file.mkdir();
 		FileWriter fw = new FileWriter("test.txt");
@@ -62,7 +60,7 @@ public class RphndCvfExact{
 		};
 		int[] L = {1}; 
 		
-		for (int l : L){
+		/*for (int l : L){
 			for(int n : N){
 				for (int h : hub){
 					for (double d : discount){
@@ -75,12 +73,14 @@ public class RphndCvfExact{
 					}
 				}
 			}
-		}
+		}*/
+		fw.append(run(25,3,0.2,"01-05",2,0));
 		fw.close();
 	}
 	
 	
-	private static String run(int N, int hub, double discount, String failure, int l, int instance) throws GRBException, IOException {
+	private static String run(int N, int hub, double discount, String failure, int l, int instance) 
+			throws GRBException, IOException, InterruptedException {
 		double startTime = System.currentTimeMillis();
 		failures = MyArray.read("Datasets/CAB/Failures/" + failure + "/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
@@ -95,13 +95,14 @@ public class RphndCvfExact{
 		nodes = new ArrayList<Node>();
 		routes = new Route[nVar][nVar][nVar][nVar];
 		hubCombs = new ArrayList<HubComb>();
+		potentialHubs = KMedoids.run("Datasets/CAB/CAB" + N + "/Distances.txt",P);
 		
 		// build Gurobi model and environment.
 		GRBEnv env = new GRBEnv(null);
 		
 		
-		env.set(	GRB.IntParam.OutputFlag , 0);
-		GRBModel model = new GRBModel(env);
+		env.set(	GRB.IntParam.OutputFlag , 1);
+		GRBModel RMP = new GRBModel(env);
 		//model.getEnv().set(GRB.DoubleParam.TimeLimit, 5);
 		
 		// initializing node objects.
@@ -109,14 +110,22 @@ public class RphndCvfExact{
 		for (int i = 0; i < nVar; i++) {
 			nodes.add(new Node(i, /* coordinates[i][0], coordinates[i][1], */
 					failures[i][0]));
-			y[i] = model.addVar(0, 1, 0, GRB.BINARY, "y" + i);
+			y[i] = RMP.addVar(0, 1, 0, GRB.BINARY, "y" + i);
 		}
 
-		// initializing hub combinations.
-		generateHubCombs(nodes, P, hubCombs, fixedCosts);
-
+		// ------    initializing hub combinations     ----------
+		List<Set<Integer>> h1 = HubCombGenerator.getSubsets(potentialHubs, P);
+		ArrayList<Node> hubs = new ArrayList<>();
+		int counter = 0;
+		for (Set<Integer> s : h1){
+			hubs = new ArrayList<>();
+			for (int i : s)
+				hubs.add(nodes.get(i));
+			hubCombs.add(new HubComb(counter++, hubs, nodes, fixedCosts));
+		}
 		
-		// mapping node indexes to hub combinations
+		
+		// ------   mapping node indexes to hub combinations   ----------
 		HashMap<Integer, ArrayList<HubComb>> map = new HashMap<Integer, ArrayList<HubComb>>();
 		for (int i = 0; i < nVar; i++)
 			map.put(i, new ArrayList<HubComb>());
@@ -124,8 +133,8 @@ public class RphndCvfExact{
 			for (Node n : h.hubs)
 				map.get(n.ID).add(h);
 		}
-		int ctr = 0;
-		// initializing routing tree variables.
+		
+		// ---------  initializing routing tree variables   ----------  
 		GRBVar[][][] x = new GRBVar[nVar][nVar][hubCombs.size()];
 		RoutingTree[][][] routingTrees = new RoutingTree[nVar][nVar][hubCombs
 				.size()];
@@ -136,13 +145,13 @@ public class RphndCvfExact{
 							nodes.get(j), hubCombs.get(k).hubs, L);  // the upper bound obtained by the greedy algorithm
 					routingTrees[i][j][k] = getRoutingTree(nodes.get(i),
 							nodes.get(j), hubCombs.get(k).hubs, L, RTUB);
-					x[i][j][k] = model.addVar(0, 1, flows[i][j]
+					x[i][j][k] = RMP.addVar(0, 1, flows[i][j]
 							* routingTrees[i][j][k].value, GRB.CONTINUOUS, "x"
-							+ i + "_" + j + "_" + k);ctr++;
+							+ i + "_" + j + "_" + k);
 				}
 			}
 		}
-		model.update();
+		RMP.update();
 
 		// Adding constrains
 		GRBLinExpr expr;
@@ -155,7 +164,7 @@ public class RphndCvfExact{
 				for (int k = 0; k < hubCombs.size(); k++) {
 					expr.addTerm(1, x[i][j][k]);
 				}
-				c2[i][j] = model.addConstr(expr, GRB.EQUAL, 1, "c2" + i + "_"
+				c2[i][j] = RMP.addConstr(expr, GRB.EQUAL, 1, "c2" + i + "_"
 						+ j);
 			}
 		}
@@ -165,19 +174,19 @@ public class RphndCvfExact{
 		for (int i = 0; i < nVar; i++) {
 			expr.addTerm(1, y[i]);
 		}
-		GRBConstr c3 = model.addConstr(expr, GRB.EQUAL, P, "c3");
+		GRBConstr c3 = RMP.addConstr(expr, GRB.EQUAL, P, "c3");
 
 		// constraints (4)
-		GRBConstr[][][] c4 = new GRBConstr[nVar][nVar][hubCombs.size()];
+		GRBConstr[][][] c4 = new GRBConstr[nVar][nVar][potentialHubs.size()];
 		for (int i = 0; i < nVar; i++) {
 			for (int j = i + 1; j < nVar; j++) {
-				for (int k = 0; k < nVar; k++) {
+				for (int k = 0; k < potentialHubs.size(); k++) {
 					expr = new GRBLinExpr();
-					for (HubComb h : map.get(k)) {
+					for (HubComb h : map.get(potentialHubs.get(k))) {
 						expr.addTerm(1, x[i][j][h.ID]);
 					}
 					expr.addTerm(-M, y[k]);
-					c4[i][j][k] = model.addConstr(expr, GRB.LESS_EQUAL, 0, "c4"
+					c4[i][j][k] = RMP.addConstr(expr, GRB.LESS_EQUAL, 0, "c4"
 							+ i + "_" + j + "_" + k);
 				}
 			}
@@ -185,19 +194,19 @@ public class RphndCvfExact{
 		double buildTime = System.currentTimeMillis() - startTime;
 		startTime = System.currentTimeMillis();
 		// solve model
-		model.optimize();
+		RMP.optimize();
 		
 		// writing solution to file
 		File file = new File ("solution_"+N+"_"+P+"_"+discount+"_"+failure+"_"+l+"_"+instance+".sol");
 		FileWriter fw = new FileWriter(file);
-		fw.append(getSol(model));
+		fw.append(getSol(RMP));
 		fw.close();
 		
 		// printing general info on the solution on to the console.
 		System.out.print(N+","+P+","+discount+","+failure+","+l);
 		System.out.print(",Obj:,");
-		System.out.print(model.get(GRB.DoubleAttr.ObjVal)+",hubs:,");
-		for (GRBVar var : model.getVars()){
+		System.out.print(RMP.get(GRB.DoubleAttr.ObjVal)+",hubs:,");
+		for (GRBVar var : RMP.getVars()){
 			if (var.get(GRB.DoubleAttr.X) != 0 && var.get(GRB.StringAttr.VarName).contains("y")){
 				System.out.print(var.get(GRB.StringAttr.VarName)+" ");
 			}			
@@ -205,16 +214,16 @@ public class RphndCvfExact{
 		
 		// saving the results into file
 		String output = "";
-		output += N+","+P+","+discount+","+failure+","+l+"," + instance + ",Obj:,"+model.get(GRB.DoubleAttr.ObjVal)+",hubs:,";
-		for (GRBVar var : model.getVars()){
+		output += N+","+P+","+discount+","+failure+","+l+"," + instance + ",Obj:,"+RMP.get(GRB.DoubleAttr.ObjVal)+",hubs:,";
+		for (GRBVar var : RMP.getVars()){
 			if (var.get(GRB.DoubleAttr.X)!=0 && var.get(GRB.StringAttr.VarName).contains("y")){
 				output += var.get(GRB.StringAttr.VarName)+ " ";
 			}
 		}
 
-		/*for ( int i = 0 ; i < nVar ; i++ )
+		for ( int i = 0 ; i < nVar ; i++ )
 			for (int j = i+1 ; j<nVar ; j++)
-				System.out.println(routingTrees[i][j][61])*/;
+				System.out.println(routingTrees[i][j][0]);
 
 		System.out.print(",Solution Time:,"
 				+ (System.currentTimeMillis() - startTime));
@@ -222,12 +231,14 @@ public class RphndCvfExact{
 		output += ",Solution Time:,"
 				+ (System.currentTimeMillis() - startTime) + ",Build Time:," + buildTime;
 
-		model.dispose();
+		System.out.println("# of constraints: " + RMP.get(GRB.IntAttr.NumConstrs) );
+		
+		RMP.dispose();
 		env.dispose();
 		return output;		
 	}
 
-	private static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
+	public static RoutingTree getRoutingTree(Node i, Node j, List<Node> hList,
 			int l, double UB) {
 		double bestRTValue = GRB.INFINITY;
 		RoutingTree bestRT = new RoutingTree((int) Math.pow(2, l + 1) - 1);
@@ -292,7 +303,7 @@ public class RphndCvfExact{
 		return bestRT;
 	}
 
-	private static double getUpperbound(Node i, Node j, List<Node> hList,
+	public static double getUpperbound(Node i, Node j, List<Node> hList,
 			int l) {
 		// Update the nodes in the hubsList by setting the isHub to true
 		for (Node n : hList)
@@ -385,6 +396,7 @@ public class RphndCvfExact{
 		}
 		return output;
 	}
+	
 
 	/**
 	 * Generates all possible hub combinations of size k from the set of nodes.
@@ -394,7 +406,7 @@ public class RphndCvfExact{
 	 * @param hubCombs
 	 * @param fixedCosts
 	 */
-	static void generateHubCombs(List<Node> nodes, int k,
+	static void generateHubCombs(ArrayList<Node> nodes, int k,
 			List<HubComb> hubCombs, double[][] fixedCosts) {
 		int[] set = new int[nodes.size()];
 		for (int i = 0; i < nodes.size(); i++)
@@ -433,7 +445,7 @@ public class RphndCvfExact{
 	 * @param model
 	 * @throws GRBException
 	 */
-	static void printSol(GRBModel model) throws GRBException {
+	public static void printSol(GRBModel model) throws GRBException {
 		for (GRBVar var : model.getVars()) {
 			double value = var.get(GRB.DoubleAttr.X);
 			if (value != 0)
@@ -452,4 +464,6 @@ public class RphndCvfExact{
 		}
 		return output;
 	}
+	
+	
 }
