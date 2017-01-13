@@ -5,13 +5,16 @@ import java.util.List;
 import java.util.PriorityQueue;
 import java.util.Set;
 
+import org.apache.commons.math3.linear.Array2DRowRealMatrix;
+import org.apache.commons.math3.linear.ArrayRealVector;
+import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.util.CombinatoricsUtils;
 
 import gurobi.GRB;
+import gurobi.GRBColumn;
 import gurobi.GRBConstr;
 import gurobi.GRBEnv;
 import gurobi.GRBException;
-import gurobi.GRBExpr;
 import gurobi.GRBLinExpr;
 import gurobi.GRBModel;
 import gurobi.GRBVar;
@@ -24,7 +27,7 @@ import model.RoutingTree;
 
 public class BenderDecomposition {
 	public static double[][] failures, distances, fixedCosts, flows;
-	public static int nVar,P,L,M;
+	public static int nVar,nConst,P,L,M;
 	public static double alpha;
 	public static List<Node> nodes;
 	public static Route[][][][] routes;
@@ -38,6 +41,7 @@ public class BenderDecomposition {
 		failures = MyArray.read("Datasets/CAB/Failures/01-05/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB10/Distances.txt");
 		nVar = distances.length;
+		nConst = (nVar*(nVar-1)/2)*(1 + nVar) + 1; 
 		flows = MyArray.read("Datasets/CAB/CAB10/Flows.txt");
 		fixedCosts = MyArray.read("Datasets/CAB/CAB10/fixedcharge.txt");
 		P = 3;
@@ -50,14 +54,13 @@ public class BenderDecomposition {
 		hubCombs = new ArrayList<HubComb>();
 		potentialHubs = KMedoids.run("Datasets/CAB/CAB10/Distances.txt",P);
 		
-		
-
 		env = new GRBEnv();
 		env.set( GRB.IntParam.OutputFlag , 1);
 		
 		GRBModel MP1 = new GRBModel(env);
 		
 		// -------------- initializing node objects & adding variables to the MasterProblem 1-------------
+		GRBVar z = MP1.addVar(-1*GRB.INFINITY, GRB.INFINITY, 0, GRB.CONTINUOUS, "z");
 		GRBVar[] y = new GRBVar[nVar];
 		for (int i = 0; i < nVar; i++) {
 			nodes.add(new Node(i, failures[i][0]));
@@ -65,21 +68,35 @@ public class BenderDecomposition {
 		}
 		MP1.update();
 		
-		// -------------- adding constraints to MasterProblem 1 ---------------
+		// -------------- adding constraints to MasterProblem 1: sum(y_i) = P ---------------
 		GRBLinExpr expr = new GRBLinExpr();
+		for (int i : potentialHubs)
+			expr.addTerm(1, y[i]);
+		GRBConstr temp = MP1.addConstr(expr, GRB.EQUAL, P, null);			
+		
+		expr = new GRBLinExpr();
 		for ( GRBVar var : y )
 			expr.addTerm(1, var);
 		MP1.addConstr(expr, GRB.EQUAL, P, null); // sum(y_i) = P
 		MP1.optimize();
+		printSol(MP1, "all");
 		
-		GRBModel SP1 = solveSP1(y);
+		// ---------------- solving sub sub problem (routing problem) for 
+		GRBModel SP1 = solveSP1(potentialHubs, y);
+//		printSol(SP1, "nonzeros");
 		SP1.write("moyModel22.lp");
-		solvePP();
-		for (GRBConstr c : SP1.getConstrs())
-			System.out.println(c.get(GRB.StringAttr.ConstrName) + ": " + c.get(GRB.DoubleAttr.Pi));
+//		solvePP();
+//		for (GRBConstr c : SP1.getConstrs())
+//			System.out.println(c.get(GRB.StringAttr.ConstrName) + ": " + c.get(GRB.DoubleAttr.Pi));
+		
+		Array2DRowRealMatrix b = getRHS(SP1, nConst);
+		Array2DRowRealMatrix u = getDuals(SP1, nConst);
+		Array2DRowRealMatrix B = getCoeffs(SP1, nConst, nVar);	
+		RealMatrix c = b.transpose().multiply(u);
+		System.out.println("");
 	}
 	
-	private static GRBModel solveSP1(GRBVar[] y) throws GRBException{
+	private static GRBModel solveSP1(List<Integer> potentialHubs, GRBVar[] y) throws GRBException{
 		// take initial hubs
 		// enumerate hub combinations
 		// build up a restricted master problem
@@ -87,11 +104,16 @@ public class BenderDecomposition {
 		// either add new combinations based on the result of the previous step or terminate the column generation process
 		
 		GRBModel SP1 = new GRBModel(env);
-		// -----------    initializing hub combinations  -------------
-		hubCombs = getHubCombs(potentialHubs, P);
+		// -----------    initializing hub combinations based on current list of potential hubs -------------
+		List<HubComb> hubCombs = getHubCombs(potentialHubs, P);
 		
-		// ------   mapping node indexes to hub combinations   ----------
+		// ------   mapping node indices to hub combinations   ----------
 		HashMap<Integer, ArrayList<HubComb>> map = getMap(hubCombs);
+		
+		// ---------  initializing location variables variables   ----------
+		GRBVar[] l = new GRBVar[nVar];
+		for (int i = 0 ; i < nVar ; i++)
+			l[i] = SP1.addVar(0, 1, 0, GRB.CONTINUOUS, "z"+i);
 		
 		// ---------  initializing routing tree variables   ----------  
 		GRBVar[][][] x = new GRBVar[nVar][nVar][hubCombs.size()];
@@ -112,7 +134,7 @@ public class BenderDecomposition {
 		
 		// Adding constrains
 		GRBLinExpr expr;
-
+		int constCount = 0;
 		// constraints (2)
 		GRBConstr[][] c2 = new GRBConstr[nVar][nVar];
 		for (int i = 0; i < nVar; i++) {
@@ -121,10 +143,15 @@ public class BenderDecomposition {
 				for (int k = 0; k < hubCombs.size(); k++) {
 					expr.addTerm(1, x[i][j][k]);
 				}
-				c2[i][j] = SP1.addConstr(expr, GRB.EQUAL, 1, "c2_" + i + "_"
-						+ j);
+				c2[i][j] = SP1.addConstr(expr, GRB.EQUAL, 1, constCount++ + "");
 			}
 		}
+		
+		// constraint (3)
+		expr = new GRBLinExpr();
+		for (int i = 0 ; i < nVar ; i++)
+			expr.addTerm(1, l[i]);		
+		GRBConstr c3 = SP1.addConstr(expr, GRB.EQUAL, P, constCount++ + "");
 		
 		// constraints (4)
 		GRBConstr[][][] c4 = new GRBConstr[nVar][nVar][nVar];
@@ -134,13 +161,24 @@ public class BenderDecomposition {
 					expr = new GRBLinExpr();
 					if (potentialHubs.contains(k)){
 						for (HubComb h : map.get(k))
-							expr.addTerm(1, x[i][j][h.ID]);		
-					c4[i][j][k] = SP1.addConstr(expr, GRB.LESS_EQUAL, M * y[k].get(GRB.DoubleAttr.X), "c4_"
-							+ i + "_" + j + "_" + k);
+							expr.addTerm(1, x[i][j][h.ID]);
+						expr.addTerm(-1 * M * y[k].get(GRB.DoubleAttr.X),l[k]);
+					c4[i][j][k] = SP1.addConstr(expr, GRB.LESS_EQUAL, 0, constCount++ + "");
+					}else{
+						expr.addTerm(-1*M, l[k]);
+						c4[i][j][k] = SP1.addConstr(expr, GRB.LESS_EQUAL, 0, constCount++ + "");
 					}
 				}
 		
-		SP1.optimize();		
+		// fixing hubs
+		GRBConstr[] temp = new GRBConstr[P];
+		for (int i = 0 ; i < nVar ; i++)
+			if ( y[i].get(GRB.DoubleAttr.X) > 0 )
+				SP1.addConstr(l[i], GRB.EQUAL, 1, constCount++ + "");
+		
+//		for (GRBConstr c : temp)
+//			SP1.remove(c);
+		SP1.optimize();	
 		return SP1;
 	}
 	
@@ -378,5 +416,35 @@ public class BenderDecomposition {
 			n.isHub = false;
 		
 		return bestRT;
+	}
+	
+	private static Array2DRowRealMatrix getRHS(GRBModel model, int nConst ) throws GRBException{
+		double[] temp = new double[nConst];
+		for ( int i = 0 ; i < nConst ; i++)
+			temp[i] = model.getConstr(i).get(GRB.DoubleAttr.RHS); 
+		return new Array2DRowRealMatrix(temp);
+	}
+	
+	private static Array2DRowRealMatrix getDuals(GRBModel model, int nConst ) throws GRBException{
+		double[] temp = new double[nConst];
+		for ( int i = 0 ; i < nConst ; i++)
+			temp[i] = model.getConstr(i).get(GRB.DoubleAttr.Pi); 
+		return new Array2DRowRealMatrix(temp);
+	}
+	
+	private static Array2DRowRealMatrix getCoeffs(GRBModel model, int nConst, int nVar) throws GRBException{
+		
+		double[][] temp = new double[nConst][nVar];
+		for (int i = 0 ; i < nVar ; i++){
+			GRBColumn col = model.getCol(model.getVar(i));
+			for (int l = 0 ; l < col.size() ; l++){
+				try{
+					temp[Integer.parseInt(col.getConstr(l).get(GRB.StringAttr.ConstrName))][i] = col.getCoeff(l);
+				}catch(ArrayIndexOutOfBoundsException e){
+					System.out.println(e);
+				}
+			}
+		}
+		return new Array2DRowRealMatrix(temp);
 	}
 }
