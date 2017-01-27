@@ -2,7 +2,6 @@ package model;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.PriorityQueue;
 
 public class RoutingTree {
@@ -121,44 +120,44 @@ public class RoutingTree {
 	}
 	
 	public static ArrayList<Route> getFeasibleRoutes(
-			Node i, 
-			Node j, 
-			List<Node> hList,
+			int i, 
+			int j, 
+			int[] hList,
+			Node[] nodes,
 			Route[][][][] routes,
 			double[][] distances,
 			double alpha
 			){
 		// generating list of feasible routes between the origin and the
 				// destination.
-		
 				ArrayList<Route> feasibleRoutes = new ArrayList<Route>();
-				if (i.isHub && j.isHub) {
-					if (routes[i.ID][i.ID][j.ID][j.ID] == null)
-						routes[i.ID][i.ID][j.ID][j.ID] = new Route(i, i, j, j,
+				if (nodes[i].isHub && nodes[j].isHub) {
+					if (routes[i][i][j][j] == null)
+						routes[i][i][j][j] = new Route(nodes[i], nodes[i], nodes[j], nodes[j],
 								distances, alpha);
-					feasibleRoutes.add(routes[i.ID][i.ID][j.ID][j.ID]);
-				} else if (i.isHub) {
-					for (Node n : hList) {
-						if (routes[i.ID][i.ID][n.ID][j.ID] == null)
-							routes[i.ID][i.ID][n.ID][j.ID] = new Route(i, i, n, j,
+					feasibleRoutes.add(routes[i][i][j][j]);
+				} else if (nodes[i].isHub) {
+					for (Integer n : hList) {
+						if (routes[i][i][n][j] == null)
+							routes[i][i][n][j] = new Route(nodes[i], nodes[i], nodes[n], nodes[j],
 									distances, alpha);
-						feasibleRoutes.add(routes[i.ID][i.ID][n.ID][j.ID]);
+						feasibleRoutes.add(routes[i][i][n][j]);
 					}
-				} else if (j.isHub) {
-					for (Node n : hList) {
-						if (routes[i.ID][n.ID][j.ID][j.ID] == null)
-							routes[i.ID][n.ID][j.ID][j.ID] = new Route(i, n, j, j,
+				} else if (nodes[j].isHub) {
+					for (Integer n : hList) {
+						if (routes[i][n][j][j] == null)
+							routes[i][n][j][j] = new Route(nodes[i], nodes[n], nodes[j], nodes[j],
 									distances, alpha);
-						feasibleRoutes.add(routes[i.ID][n.ID][j.ID][j.ID]);
+						feasibleRoutes.add(routes[i][n][j][j]);
 					}
 				} else {
-					for (int u = 0; u < hList.size(); u++) {
-						for (int v = u; v < hList.size(); v++) {
-							if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] == null
-									&& routes[i.ID][hList.get(v).ID][hList.get(u).ID][j.ID] == null) {
-								Route r1 = new Route(i, hList.get(u), hList.get(v), j,
+					for (int u = 0; u < hList.length; u++) {
+						for (int v = u; v < hList.length; v++) {
+							if (routes[i][hList[u]][hList[v]][j] == null
+									&& routes[i][hList[v]][hList[u]][j] == null) {
+								Route r1 = new Route(nodes[i], nodes[hList[u]], nodes[hList[v]], nodes[j],
 										distances, alpha);
-								Route r2 = new Route(i, hList.get(v), hList.get(u), j,
+								Route r2 = new Route(nodes[i], nodes[hList[v]], nodes[hList[u]], nodes[j],
 										distances, alpha);
 								if (r1.expCost <= r2.expCost) {
 									routes[r1.i.ID][r1.k.ID][r1.m.ID][r1.j.ID] = r1;
@@ -167,12 +166,10 @@ public class RoutingTree {
 									routes[r2.i.ID][r2.k.ID][r2.m.ID][r2.j.ID] = r2;
 									feasibleRoutes.add(r2);
 								}
-							} else if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] != null) {
-								feasibleRoutes.add(routes[i.ID][hList.get(u).ID][hList
-										.get(v).ID][j.ID]);
+							} else if (routes[i][hList[u]][hList[v]][j] != null) {
+								feasibleRoutes.add(routes[i][hList[u]][hList[v]][j]);
 							} else {
-								feasibleRoutes.add(routes[i.ID][hList.get(v).ID][hList
-										.get(u).ID][j.ID]);
+								feasibleRoutes.add(routes[i][hList[v]][hList[u]][j]);
 							}
 						}
 					}
@@ -181,9 +178,10 @@ public class RoutingTree {
 	}
 	
 	public static PriorityQueue<Route> getFeasibleRoutes2(
-			Node i, 
-			Node j, 
-			List<Node> hList,
+			int i, 
+			int j, 
+			int[] hList,
+			Node[] nodes,
 			Route[][][][] routes,
 			double[][] distances,
 			double alpha
@@ -191,33 +189,33 @@ public class RoutingTree {
 		// generating list of feasible routes between the origin and the
 				// destination.
 		PriorityQueue<Route> feasibleRoutes = new PriorityQueue<Route>();
-				if (i.isHub && j.isHub) {
-					if (routes[i.ID][i.ID][j.ID][j.ID] == null)
-						routes[i.ID][i.ID][j.ID][j.ID] = new Route(i, i, j, j,
+				if (nodes[i].isHub && nodes[j].isHub) {
+					if (routes[i][i][j][j] == null)
+						routes[i][i][j][j] = new Route(nodes[i], nodes[i], nodes[j], nodes[j],
 								distances, alpha);
-					feasibleRoutes.add(routes[i.ID][i.ID][j.ID][j.ID]);
-				} else if (i.isHub) {
-					for (Node n : hList) {
-						if (routes[i.ID][i.ID][n.ID][j.ID] == null)
-							routes[i.ID][i.ID][n.ID][j.ID] = new Route(i, i, n, j,
+					feasibleRoutes.add(routes[i][i][j][j]);
+				} else if (nodes[i].isHub) {
+					for (Integer n : hList) {
+						if (routes[i][i][n][j] == null)
+							routes[i][i][n][j] = new Route(nodes[i], nodes[i], nodes[n], nodes[j],
 									distances, alpha);
-						feasibleRoutes.add(routes[i.ID][i.ID][n.ID][j.ID]);
+						feasibleRoutes.add(routes[i][i][n][j]);
 					}
-				} else if (j.isHub) {
-					for (Node n : hList) {
-						if (routes[i.ID][n.ID][j.ID][j.ID] == null)
-							routes[i.ID][n.ID][j.ID][j.ID] = new Route(i, n, j, j,
+				} else if (nodes[j].isHub) {
+					for (Integer n : hList) {
+						if (routes[i][n][j][j] == null)
+							routes[i][n][j][j] = new Route(nodes[i], nodes[n], nodes[j], nodes[j],
 									distances, alpha);
-						feasibleRoutes.add(routes[i.ID][n.ID][j.ID][j.ID]);
+						feasibleRoutes.add(routes[i][n][j][j]);
 					}
 				} else {
-					for (int u = 0; u < hList.size(); u++) {
-						for (int v = u; v < hList.size(); v++) {
-							if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] == null
-									&& routes[i.ID][hList.get(v).ID][hList.get(u).ID][j.ID] == null) {
-								Route r1 = new Route(i, hList.get(u), hList.get(v), j,
+					for (int u = 0; u < hList.length; u++) {
+						for (int v = u; v < hList.length; v++) {
+							if (routes[i][hList[u]][hList[v]][j] == null
+									&& routes[i][hList[v]][hList[u]][j] == null) {
+								Route r1 = new Route(nodes[i], nodes[hList[u]], nodes[hList[v]], nodes[j],
 										distances, alpha);
-								Route r2 = new Route(i, hList.get(v), hList.get(u), j,
+								Route r2 = new Route(nodes[i], nodes[hList[v]],nodes[hList[u]], nodes[j],
 										distances, alpha);
 								if (r1.expCost <= r2.expCost) {
 									routes[r1.i.ID][r1.k.ID][r1.m.ID][r1.j.ID] = r1;
@@ -226,16 +224,10 @@ public class RoutingTree {
 									routes[r2.i.ID][r2.k.ID][r2.m.ID][r2.j.ID] = r2;
 									feasibleRoutes.add(r2);
 								}
-							} else if (routes[i.ID][hList.get(u).ID][hList.get(v).ID][j.ID] != null) {
-								feasibleRoutes.add(routes[i.ID][hList.get(u).ID][hList
-										.get(v).ID][j.ID]);
-							} else /*
-									 * if (
-									 * !routes[i.ID][hList.get(v).ID][hList.get(u).ID
-									 * ][j.ID].equals(null) )
-									 */{
-								feasibleRoutes.add(routes[i.ID][hList.get(v).ID][hList
-										.get(u).ID][j.ID]);
+							} else if (routes[i][hList[u]][hList[v]][j] != null) {
+								feasibleRoutes.add(routes[i][hList[u]][hList[v]][j]);
+							} else {
+								feasibleRoutes.add(routes[i][hList[v]][hList[u]][j]);
 							}
 						}
 					}
