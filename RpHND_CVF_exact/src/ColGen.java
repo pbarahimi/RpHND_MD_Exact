@@ -28,14 +28,40 @@ public class ColGen {
 
 	public static void main ( String[] args) 
 			throws IOException, InterruptedException, GRBException{
-		failures = MyArray.read("Datasets/CAB/Failures/01-10/failures.txt");
-		distances = MyArray.read("Datasets/CAB/CAB25/Distances.txt");
+		int[] SIZE = {10,15,20,25};
+		int[] P = {3,5,7};
+		int[] L = {1,2,3};
+		double[] DISCOUNT = {0.2};
+		String[] FAILURE = {
+				"01-05",
+				"05-10",
+				"10-15",
+				"15-20",
+				"20-25",
+				"01-10",
+				"01-15",
+				"01-20",
+				"01-25"				
+		};
+		
+		for (int n : SIZE)
+			for (int p : P)
+				for (int l : L)
+					for ( double d : DISCOUNT)
+						for (String f : FAILURE)
+							run(n,p,f,d,l);
+		
+	}
+	
+	public static void run (int N, int p, String failure, double d, int l) throws IOException, InterruptedException{
+		failures = MyArray.read("Datasets/CAB/Failures/" + failure + "/failures.txt");
+		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
-		flows = MyArray.read("Datasets/CAB/CAB25/Flows.txt");
-		fixedCosts = MyArray.read("Datasets/CAB/CAB25/fixedcharge.txt");
-		P = 5;
-		L = 3; // maximum number of failures
-		alpha = 0.2;
+		flows = MyArray.read("Datasets/CAB/CAB" + N + "/Flows.txt");
+		fixedCosts = MyArray.read("Datasets/CAB/CAB" + N + "/fixedcharge.txt");
+		P = p;
+		L = l; // maximum number of failures
+		alpha = d;
 		nodes = new Node[nVar];
 		routes = new Route[nVar][nVar][nVar][nVar];
 		double startTime = System.currentTimeMillis();
@@ -51,7 +77,7 @@ public class ColGen {
 		
 		// ---------- run k-medoids algorithm to obtain an seed for hub combinations and get an upper bound ------------
 		int[] initialHubs = new int[P];
-		List<Integer> intialHubsTemp = KMedoids.run("Datasets/CAB/CAB25/Distances.txt",P); 
+		List<Integer> intialHubsTemp = KMedoids.run("Datasets/CAB/CAB" + N + "/Distances.txt",P); 
 		for (int i = 0 ; i < P ; i++ )
 			initialHubs[i] = intialHubsTemp.get(i);
 		Network initialNetwork = getNetwork(initialHubs, L);
@@ -76,7 +102,6 @@ public class ColGen {
 		System.out.print("- " + upperBound);
 		double finishTime = System.currentTimeMillis() - startTime;
 		System.out.println(" - Time: " + finishTime);
-		
 	}
 
 	

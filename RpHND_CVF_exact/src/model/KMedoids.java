@@ -24,7 +24,6 @@ public class KMedoids {
 		pr.waitFor(5, TimeUnit.MINUTES);
 		centers = centers.substring(1, centers.length()-1);
 		String[] outputString = centers.split(", ");
-//		int[] output = new int[outputString.length];
 		ArrayList<Integer> output = new ArrayList<>();
 		for (int i = 0 ; i < outputString.length ; i++)
 			output.add( Integer.parseInt(outputString[i]) );
