@@ -95,7 +95,7 @@ class K_medoids:
         return new_center
 filePath = sys.argv[1]
 k = int(sys.argv[2])
-distances = loadtxt(filePath,dtype=float)
+distances = np.loadtxt(filePath,dtype=float)
 N = len(distances)
 itr = int(N/2)
 clusters = K_medoids(range(N),k,itr,distances).run()

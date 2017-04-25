@@ -10,7 +10,7 @@ import java.util.concurrent.TimeUnit;
 public class KMedoids { 	
 
 	public static List<Integer> run ( String filePath, int k ) throws IOException, InterruptedException {		
-		ProcessBuilder pb = new ProcessBuilder("cmd",
+		ProcessBuilder pb = new ProcessBuilder("cmd",				
 				"/c",
 				"python",
 				"lib/KM.py",

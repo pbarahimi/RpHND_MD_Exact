@@ -1,23 +1,23 @@
+import gurobi.GRB;
+import gurobi.GRBException;
+import gurobi.GRBModel;
+import gurobi.GRBVar;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 
-import org.apache.commons.math3.linear.Array2DRowRealMatrix;
-import org.apache.commons.math3.util.Combinations;
-
-import gurobi.GRB;
-import gurobi.GRBColumn;
-import gurobi.GRBException;
-import gurobi.GRBModel;
-import gurobi.GRBVar;
+import model.HND;
 import model.KMedoids;
 import model.Network;
 import model.Node;
 import model.Route;
 import model.RoutingTree;
 
-public class ColGen {
+import org.apache.commons.math3.util.Combinations;
+
+public class RpHND_Exact_Main {
 	public static double[][] failures, distances, fixedCosts, flows;
 	public static int nVar, nConst, P, L, M;
 	public static double alpha;
@@ -30,31 +30,22 @@ public class ColGen {
 			throws IOException, InterruptedException, GRBException{
 		int[] SIZE = {10,15,20,25};
 		int[] P = {3,5,7};
-		int[] L = {1,2,3};
-		double[] DISCOUNT = {0.2};
-		String[] FAILURE = {
-				"01-05",
-				"05-10",
-				"10-15",
-				"15-20",
-				"20-25",
-				"01-10",
-				"01-15",
-				"01-20",
-				"01-25"				
-		};
+		int[] L = {0,1,2,3};
+		double[] DISCOUNT = {0.2,0.4,0.6};
+		double[] FAILURE = {0,0.05,0.1,0.15,0.2};
 		
 		for (int n : SIZE)
 			for (int p : P)
-				for (int l : L)
 					for ( double d : DISCOUNT)
-						for (String f : FAILURE)
-							run(n,p,f,d,l);
+							run(n,p,0,d,1);
+		};
 		
-	}
+		
+		
 	
-	public static void run (int N, int p, String failure, double d, int l) throws IOException, InterruptedException{
-		failures = MyArray.read("Datasets/CAB/Failures/" + failure + "/failures.txt");
+	
+	public static void run (int N, int p, double q, double d, int l) throws IOException, InterruptedException, GRBException{
+		failures = MyArray.read("Datasets/An_Failures/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
 		flows = MyArray.read("Datasets/CAB/CAB" + N + "/Flows.txt");
@@ -75,11 +66,16 @@ public class ColGen {
 		Combinations hubCombs = new Combinations(nVar, P);
 		
 		
-		// ---------- run k-medoids algorithm to obtain an seed for hub combinations and get an upper bound ------------
+		// ---------- run k-medoids algorithm to obtain a seed for hub combinations and get an upper bound ------------
 		int[] initialHubs = new int[P];
 		List<Integer> intialHubsTemp = KMedoids.run("Datasets/CAB/CAB" + N + "/Distances.txt",P); 
 		for (int i = 0 ; i < P ; i++ )
 			initialHubs[i] = intialHubsTemp.get(i);
+		
+		/*HND traditionalHLP = new HND(distances, flows, p, alpha);
+		int[] initialHubs = traditionalHLP.hubs;*/
+		
+		// ------------ Create a network based on the seed ---------------
 		Network initialNetwork = getNetwork(initialHubs, L);
 		
 		double upperBound = initialNetwork.cost;
@@ -90,13 +86,13 @@ public class ColGen {
 			if ( networkLowerBound < upperBound ){
 				Network network = getNetwork(hubComb, L);
 				if ( network.cost < upperBound ){
-					upperBound = bestNetwork.cost;
+					upperBound = network.cost;
 					bestNetwork = network;
 				}
 				counter++;
 			}				
 		}		
-		System.out.print(counter + " - ");
+		System.out.print(N + "_" + p + "_" + d+ "_" + counter + " - ");
 		for (int i : bestNetwork.hubs)
 			System.out.print(i + " ");
 		System.out.print("- " + upperBound);
