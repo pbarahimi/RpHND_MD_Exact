@@ -99,7 +99,7 @@ public class RoutingTree {
 	};
 	
 	public boolean isComplete(){
-		if (this.unexploredNodes.size() ==0)
+		if (this.unexploredNodes.size() == 0)
 			return true;
 		else
 			return false;

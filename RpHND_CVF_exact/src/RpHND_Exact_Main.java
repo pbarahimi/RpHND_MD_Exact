@@ -366,7 +366,7 @@ public class RpHND_Exact_Main {
 		// instantiating unexplored RoutingTreeNodes
 		ArrayList<RoutingTree> unexploredNodes = new ArrayList<RoutingTree>();
 
-		// initializing a RoutingTreeNode for each feasible route.
+		// initializing a RoutingTreeNode for each feasible routes.
 		for (Route r : feasibleRoutes) {
 			RoutingTree rt = new RoutingTree(
 					new Route[(int) Math.pow(2, l + 1) - 1], r, feasibleRoutes,
@@ -410,6 +410,8 @@ public class RpHND_Exact_Main {
 						if (rt.value < bestRTValue) {
 							bestRT = rt;
 							bestRTValue = bestRT.value;
+							if (bestRTValue < UB)
+								UB = bestRTValue;
 						}
 					} else if (!rt.pruned)
 						unexploredNodes.add(rt);
