@@ -89,7 +89,7 @@ public class RpHND_Exact_Main {
 		Network bestNetwork = initialNetwork;
 		int counter = 0;
 		for (int[] hubComb : hubCombs) {
-			double networkLowerBound = getNetworkLowerBound(hubComb, L);
+			double networkLowerBound = getNetworkUpperBound(hubComb, L, upperBound);
 			if (networkLowerBound < upperBound) {
 				Network network = getNetwork(hubComb, L);
 				if (network.cost < upperBound) {
@@ -108,12 +108,15 @@ public class RpHND_Exact_Main {
 		System.out.println(" , Time: ," + finishTime);
 	}
 
-	private static double getNetworkLowerBound(int[] hubComb, int l) {
-		double lowerBound = 0;
+	private static double getNetworkUpperBound(int[] hubComb, int l, double bestUB) {
+		double upperBound = 0;
 		for (int i = 0; i < nVar; i++)
-			for (int j = i + 1; j < nVar; j++)
-				lowerBound += getLowerbound(i, j, hubComb, l) * flows[i][j];
-		return lowerBound;
+			for (int j = i + 1; j < nVar; j++){
+				upperBound += getLowerbound(i, j, hubComb, l) * flows[i][j];
+				if (upperBound > bestUB)
+					return upperBound;
+			}				
+		return upperBound;
 	}
 
 	private static Network getNetwork(int[] hubs, int l) {
@@ -389,13 +392,13 @@ public class RpHND_Exact_Main {
 				int childNodeInd = currentNode.unexploredNodes.get(0);
 				int parentNodeInd = (int) Math.floor((childNodeInd - 1) / 2);
 
-				String flag = "left";
+				boolean flag = true; // left node
 				if (childNodeInd % 2 == 0)
-					flag = "right";
+					flag = false; // right node
 
 				ArrayList<Route> avlRoutes = currentNode.availableRoutes
 						.get(parentNodeInd);
-				if (flag.equals("left")) {
+				if ( flag ) {
 					avlRoutes = RoutingTree.getAvlRoutes(avlRoutes,
 							currentNode.routes[parentNodeInd].k);
 				} else {
