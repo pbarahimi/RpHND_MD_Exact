@@ -32,7 +32,7 @@ public class RpHND_Exact_Main {
 
 	public static void main(String[] args) throws IOException,
 			InterruptedException, GRBException {
-		timeLimit = 10*1000;
+		timeLimit = 5*1000;
 		String timestamp = new SimpleDateFormat("yyyyMMdd-HH.mm.ss").format(new Date());
 		PrintWriter out = new PrintWriter(new File("results_" + timestamp + ".txt"));
 		
