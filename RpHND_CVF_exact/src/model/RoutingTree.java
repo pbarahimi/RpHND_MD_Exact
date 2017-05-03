@@ -45,11 +45,8 @@ public class RoutingTree {
 	
 	
 	private <T> void prune(T upperBound){
-		double gap = (double) upperBound - this.value;
-		if (gap < 0.1)
+		if ((double) upperBound < this.value)
 			this.pruned = true;
-		/*else
-			System.out.println(gap);*/
 	}
 	
 	private void updateUsedHubs(int newNodeInd){

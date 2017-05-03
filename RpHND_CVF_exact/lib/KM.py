@@ -1,9 +1,9 @@
 import sys
 
 from numpy import loadtxt
-from math import inf, sqrt
+from math import sqrt
 from platform import node
-from scipy import cluster
+# from scipy import cluster
 import numpy as np
 from numpy.core.defchararray import center
 
@@ -30,13 +30,13 @@ class K_medoids:
         
     def run(self):
         output = {}
-        SSE = inf
+        SSE = np.inf
         
         # repeat the algorithm 'itr' times to avoid local minimum
         for i in range(self.itr):
             # random selection of initial centers
             currentCenters = np.random.choice(len(self.x), self.k, replace=False)
-            currentSSE = inf
+            currentSSE = np.inf
             newCenters = [None]*self.k
                         
             # assignment of nodes to the centers
@@ -65,7 +65,7 @@ class K_medoids:
         clusters = {center_index:[] for center_index in centers}
         clustersSSE = 0
         for node in self.x:
-            best_dist = inf
+            best_dist = np.inf
             for j in centers:
                 if self.distances[node][self.x[j]] < best_dist:
                     best_dist = self.distances[node][self.x[j]]
@@ -87,7 +87,7 @@ class K_medoids:
         return SSE
     
     def getNewCenter(self,oldCenter,cluster):        
-        bestSSE = inf
+        bestSSE = np.inf
         for node in cluster:
             temp_SSE = self.getSSE(node, cluster)
             if temp_SSE < bestSSE:

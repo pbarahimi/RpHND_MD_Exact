@@ -1,21 +1,23 @@
-import gurobi.GRB;
-import gurobi.GRBException;
-import gurobi.GRBModel;
-import gurobi.GRBVar;
-
+import java.io.File;
 import java.io.IOException;
+import java.io.PrintWriter;
+import java.util.Date;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.PriorityQueue;
 
-import model.HND;
+import org.apache.commons.math3.util.Combinations;
+
+import gurobi.GRB;
+import gurobi.GRBException;
+import gurobi.GRBModel;
+import gurobi.GRBVar;
 import model.KMedoids;
 import model.Network;
 import model.Node;
 import model.Route;
 import model.RoutingTree;
-
-import org.apache.commons.math3.util.Combinations;
 
 public class RpHND_Exact_Main {
 	public static double[][] failures, distances, fixedCosts, flows;
@@ -25,26 +27,37 @@ public class RpHND_Exact_Main {
 	public static Route[][][][] routes;
 	public static Combinations hubCombs;
 	public static List<Integer> potentialHubs;
+	public static long timeLimit;
+	public static boolean isExact;
 
 	public static void main(String[] args) throws IOException,
 			InterruptedException, GRBException {
+		timeLimit = 10*1000;
+		String timestamp = new SimpleDateFormat("yyyyMMdd-HH.mm.ss").format(new Date());
+		PrintWriter out = new PrintWriter(new File("results_" + timestamp + ".txt"));
+		
 		int[] SIZE = { 10, 15, 20, 25 };
 		int[] P = { 3, 5, 7 };
 		int[] L = { 0, 1, 2, 3 };
 		double[] DISCOUNT = { 0.2, 0.4, 0.6 };
-		double[] FAILURE = { 0, 0.05, 0.1, 0.15, 0.2 };
+		double[] FAILURE = { 0.05, 0.1, 0.15, 0.2 };
 
+		
 		for (int l : L)
 			for (int n : SIZE)
 				for (int p : P)
 					for (double q : FAILURE)
-						for (double d : DISCOUNT)							
-							if (l < p)
-								run(n, p, q, d, l);
+						for (double d : DISCOUNT)						
+							if (l < p){
+								isExact = true;
+								out.append(run(n, p, q, d, l) + "\r\n");
+							}
+		out.close();	
 	};
 
-	public static void run(int N, int p, double q, double d, int l)
+	public static String run(int N, int p, double q, double d, int l)
 			throws IOException, InterruptedException, GRBException {
+		String output = "";
 		failures = MyArray.read("Datasets/An_Failures/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
@@ -99,13 +112,15 @@ public class RpHND_Exact_Main {
 				counter++;
 			}
 		}
-		System.out.print(N + "," + p + "," + d + "," + q + "," + l + ","
-				+ counter + ",");
+		output = N + "," + p + "," + d + "," + q + "," + l + ","
+				+ counter + ",";
 		for (int i : bestNetwork.hubs)
-			System.out.print(i + " ");
-		System.out.print("," + bestNetwork.cost);
+			output += i + " ";
+		output += "," + bestNetwork.cost;
 		double finishTime = System.currentTimeMillis() - startTime;
-		System.out.println(" , Time: ," + finishTime);
+		output += "," + finishTime + "," + isExact + "," + new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss").format(new Date());
+		System.out.println(output);
+		return output;
 	}
 
 	private static double getNetworkUpperBound(int[] hubComb, int l, double bestUB) {
@@ -383,7 +398,12 @@ public class RpHND_Exact_Main {
 				unexploredNodes.add(rt);
 		}
 
+		double startTime = System.currentTimeMillis();
 		while (!unexploredNodes.isEmpty()) {
+			if (System.currentTimeMillis() - startTime > timeLimit){
+				isExact = false;
+				break;
+			}
 			RoutingTree currentNode = unexploredNodes.get(unexploredNodes
 					.size() - 1);
 			unexploredNodes.remove(unexploredNodes.size() - 1);
