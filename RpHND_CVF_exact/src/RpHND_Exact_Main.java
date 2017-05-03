@@ -1,9 +1,9 @@
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.Date;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 import java.util.PriorityQueue;
 
@@ -35,6 +35,7 @@ public class RpHND_Exact_Main {
 		timeLimit = 10*1000;
 		String timestamp = new SimpleDateFormat("yyyyMMdd-HH.mm.ss").format(new Date());
 		PrintWriter out = new PrintWriter(new File("results_" + timestamp + ".txt"));
+		System.out.println(RpHND_Exact_Main.class.getProtectionDomain().getCodeSource().getLocation().getPath());
 		
 		int[] SIZE = { 10, 15, 20, 25 };
 		int[] P = { 3, 5, 7 };
