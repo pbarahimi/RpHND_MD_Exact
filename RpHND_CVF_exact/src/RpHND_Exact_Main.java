@@ -37,21 +37,21 @@ public class RpHND_Exact_Main {
 		PrintWriter out = new PrintWriter(new File("results_" + timestamp + ".txt"));
 		System.out.println(RpHND_Exact_Main.class.getProtectionDomain().getCodeSource().getLocation().getPath());
 		
-		int[] SIZE = { 10, 15, 20, 25 };
-		int[] P = { 3, 5, 7 };
-		int[] L = { 0, 1, 2, 3 };
-		double[] DISCOUNT = { 0.2, 0.4, 0.6 };
-		double[] FAILURE = { 0.05, 0.1, 0.15, 0.2 };
+		int[] SIZE = { 15,20,25};
+		int[] P = { 3,5,7 };
+		int[] L = { 0,1,2};
+		double[] DISCOUNT = { 0.2,0.4,0.6 };
+		double[] FAILURE = { 0.01, 0.05, 0.1 };		
 
 		
 		for (int l : L)
 			for (int n : SIZE)
 				for (int p : P)
-					for (double q : FAILURE)
-						for (double d : DISCOUNT)						
+//					for (double q : FAILURE)
+						for (double d : DISCOUNT)	
 							if (l < p){
 								isExact = true;
-								out.append(run(n, p, q, d, l) + "\r\n");
+								out.append(run(n, p, 0, d, l) + "\r\n");
 							}
 		out.close();	
 	};
@@ -72,8 +72,8 @@ public class RpHND_Exact_Main {
 		double startTime = System.currentTimeMillis();
 
 		// --------------- setting node failures ------------
-		for (int i = 0; i < nVar; i++)
-			failures[i][0] = q;
+		/*for (int i = 0; i < nVar; i++)
+			failures[i][0] = q;*/
 
 		// --------------- initializing node objects ------------
 		for (int i = 0; i < nVar; i++) {
@@ -113,7 +113,7 @@ public class RpHND_Exact_Main {
 				counter++;
 			}
 		}
-		output = N + "," + p + "," + d + "," + q + "," + l + ","
+		output = N + "," + p + "," + d + "," + q + "," + l + "," 
 				+ counter + ",";
 		for (int i : bestNetwork.hubs)
 			output += i + " ";
