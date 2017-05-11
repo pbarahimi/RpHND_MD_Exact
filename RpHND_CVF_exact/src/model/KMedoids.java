@@ -12,7 +12,7 @@ public class KMedoids {
 	public static List<Integer> run ( String filePath, int k ) throws IOException, InterruptedException {		
 		ProcessBuilder pb = new ProcessBuilder("cmd",				
 				"/c",
-				"python",
+				"C:/Anaconda/python.exe",
 				"lib/KM.py",
 				filePath,
 				k + "");

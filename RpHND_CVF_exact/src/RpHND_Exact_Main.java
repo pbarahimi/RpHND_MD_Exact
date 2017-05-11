@@ -43,8 +43,12 @@ public class RpHND_Exact_Main {
 		int[] P = { 3,5,7 };
 		int[] L = { 0,1,2,3};
 		double[] DISCOUNT = { 0.2,0.4,0.6 };
-		double[] FAILURE = { 0.05, 0.1, 0.15 , 0.20 };		
+		double[] FAILURE = { 0.05, 0.1, 0.15 , 0.20 };
 
+		// printing headers
+		String header = "N,p,alpha,q,l,counter,hubs,obj,time,exact,time stamp,flows_bad,flows_indifferent,flows_good,nonhub_links,interhub_links,total_inter_hub_distance";
+		System.out.println(header);
+		out.append(header + "\r\n");
 //		Plot myplot = new Plot("Test_Plot", Txt2Array.read("hubs.txt"," "), Txt2Array.read("spokes.txt"," "));
 //		myplot.draw();
 		for (int l : L)
@@ -62,13 +66,40 @@ public class RpHND_Exact_Main {
 								System.out.println(net.results + consoleOutput);
 								out.append(net.results + consoleOutput + "\r\n");
 							}
+		
+		
+		/*String header = "N,p,alpha,q,l,instance,counter,hubs,obj,time,exact,time stamp,flows_bad,flows_indifferent,flows_good,nonhub_links,interhub_links,total_inter_hub_distance";
+		int[] SIZE = { 20};
+		int[] P = { 7 };
+		int[] L = { 2 };
+		double[] DISCOUNT = { 0.2 };
+		double[] FAILURE = { 0.02, 0.04, 0.06 , 0.08, 0.1};
+		
+		for (int l : L)
+			for (int n : SIZE)
+				for (int p : P)
+					for (double q : FAILURE)
+						for (double d : DISCOUNT)	
+							for (int i = 0 ; i < 10; i++){
+								if (l < p){
+									isExact = true;
+									Network net = run(n, p, q, d, l, i);
+									double[] temp1 = getFlowsProportions(net);
+									double[] temp2 = getLinksProportions(net);
+									double temp3 = getHubsDispersion(net);
+									String consoleOutput = "," + String.format("%.4f", temp1[0]) + "," + String.format("%.4f", temp1[1]) + "," + String.format("%.4f", temp1[2]) + "," + String.format("%.4f", temp2[0]) + "," + String.format("%.4f", temp2[1]) + "," + String.format("%.4f", temp3);
+									System.out.println(net.results + consoleOutput);
+									out.append(net.results + consoleOutput + "\r\n");
+								}
+							}*/
+							
 		out.close();
 	};
 
 	public static Network run(int N, int p, double q, double d, int l)
 			throws IOException, InterruptedException, GRBException {
 		String result = "";
-		failures = MyArray.read("Datasets/An_Failures/failures.txt");
+		failures = MyArray.read("Datasets/An_Failure/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
 		flows = MyArray.read("Datasets/CAB/CAB" + N + "/Flows.txt");
@@ -81,8 +112,8 @@ public class RpHND_Exact_Main {
 		double startTime = System.currentTimeMillis();
 
 		// --------------- setting node failures ------------
-		for (int i = 0; i < nVar; i++)
-			failures[i][0] = q;
+		/*for (int i = 0; i < nVar; i++)
+			failures[i][0] = q;*/
 
 		// --------------- initializing node objects ------------
 		for (int i = 0; i < nVar; i++) {
