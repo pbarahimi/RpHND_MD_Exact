@@ -4,6 +4,7 @@ public class Network{
 	public final int[] hubs;
 	public final RoutingTree[][] routingTrees;
 	public final double cost;
+	public String results;
 	
 	public Network(int[] hubs, RoutingTree[][] RT, double[][] flows){
 		this.hubs = hubs;

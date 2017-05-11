@@ -1,6 +1,7 @@
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.text.DecimalFormat;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
@@ -16,8 +17,10 @@ import gurobi.GRBVar;
 import model.KMedoids;
 import model.Network;
 import model.Node;
+import model.Plot;
 import model.Route;
 import model.RoutingTree;
+import model.Txt2Array;
 
 public class RpHND_Exact_Main {
 	public static double[][] failures, distances, fixedCosts, flows;
@@ -35,30 +38,36 @@ public class RpHND_Exact_Main {
 		timeLimit = 5*1000;
 		String timestamp = new SimpleDateFormat("yyyyMMdd-HH.mm.ss").format(new Date());
 		PrintWriter out = new PrintWriter(new File("results_" + timestamp + ".txt"));
-		System.out.println(RpHND_Exact_Main.class.getProtectionDomain().getCodeSource().getLocation().getPath());
 		
-		int[] SIZE = { 15,20,25};
+		int[] SIZE = { 20};
 		int[] P = { 3,5,7 };
-		int[] L = { 0,1,2};
+		int[] L = { 0,1,2,3};
 		double[] DISCOUNT = { 0.2,0.4,0.6 };
-		double[] FAILURE = { 0.01, 0.05, 0.1 };		
+		double[] FAILURE = { 0.05, 0.1, 0.15 , 0.20 };		
 
-		
+//		Plot myplot = new Plot("Test_Plot", Txt2Array.read("hubs.txt"," "), Txt2Array.read("spokes.txt"," "));
+//		myplot.draw();
 		for (int l : L)
 			for (int n : SIZE)
 				for (int p : P)
-//					for (double q : FAILURE)
+					for (double q : FAILURE)
 						for (double d : DISCOUNT)	
 							if (l < p){
 								isExact = true;
-								out.append(run(n, p, 0, d, l) + "\r\n");
+								Network net = run(n, p, q, d, l);
+								double[] temp1 = getFlowsProportions(net);
+								double[] temp2 = getLinksProportions(net);
+								double temp3 = getHubsDispersion(net);
+								String consoleOutput = "," + String.format("%.4f", temp1[0]) + "," + String.format("%.4f", temp1[1]) + "," + String.format("%.4f", temp1[2]) + "," + String.format("%.4f", temp2[0]) + "," + String.format("%.4f", temp2[1]) + "," + String.format("%.4f", temp3);
+								System.out.println(net.results + consoleOutput);
+								out.append(net.results + consoleOutput + "\r\n");
 							}
-		out.close();	
+		out.close();
 	};
 
-	public static String run(int N, int p, double q, double d, int l)
+	public static Network run(int N, int p, double q, double d, int l)
 			throws IOException, InterruptedException, GRBException {
-		String output = "";
+		String result = "";
 		failures = MyArray.read("Datasets/An_Failures/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
@@ -72,8 +81,8 @@ public class RpHND_Exact_Main {
 		double startTime = System.currentTimeMillis();
 
 		// --------------- setting node failures ------------
-		/*for (int i = 0; i < nVar; i++)
-			failures[i][0] = q;*/
+		for (int i = 0; i < nVar; i++)
+			failures[i][0] = q;
 
 		// --------------- initializing node objects ------------
 		for (int i = 0; i < nVar; i++) {
@@ -113,15 +122,15 @@ public class RpHND_Exact_Main {
 				counter++;
 			}
 		}
-		output = N + "," + p + "," + d + "," + q + "," + l + "," 
+		result = N + "," + p + "," + d + "," + q + "," + l + "," 
 				+ counter + ",";
 		for (int i : bestNetwork.hubs)
-			output += i + " ";
-		output += "," + bestNetwork.cost;
+			result += i + " ";
+		result += "," + bestNetwork.cost;
 		double finishTime = System.currentTimeMillis() - startTime;
-		output += "," + finishTime + "," + isExact + "," + new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss").format(new Date());
-		System.out.println(output);
-		return output;
+		result += "," + finishTime + "," + isExact + "," + new SimpleDateFormat("yyyy/MM/dd-HH:mm:ss").format(new Date());
+		bestNetwork.results  = result;
+		return bestNetwork;
 	}
 
 	private static double getNetworkUpperBound(int[] hubComb, int l, double bestUB) {
@@ -401,7 +410,7 @@ public class RpHND_Exact_Main {
 
 		double startTime = System.currentTimeMillis();
 		while (!unexploredNodes.isEmpty()) {
-			if (System.currentTimeMillis() - startTime > timeLimit){
+			if (System.currentTimeMillis() - startTime > timeLimit  && bestRTValue != GRB.INFINITY){
 				isExact = false;
 				break;
 			}
@@ -447,5 +456,60 @@ public class RpHND_Exact_Main {
 			nodes[n].isHub = false;
 
 		return bestRT;
+	}
+	
+	private static double[] getFlowsProportions(Network net){
+		double[] output = {0,0,0};
+		double totalFlow = 0;
+		int index;		
+		
+		for (int i = 0 ; i < nVar ; i++){
+			for (int j = i+1 ; j < nVar ; j++){
+				totalFlow += flows[i][j];
+				Route r = net.routingTrees[i][j].routes[0];
+				if ( !r.k.equals(r.m) ) //iijj or ikmj or iimj or ikjj
+					index = 2;
+				else {
+					if ( !r.i.equals(r.k) && !r.j.equals(r.m)) //ikkj
+						index = 0;
+					else	// iiij or ijjj
+						index = 1;
+				}									
+				output[index] += flows[r.i.ID][r.j.ID];
+			}
+		}
+		
+		for (int i = 0 ; i < output.length ; i++ )
+			output[i] = output[i]/totalFlow;
+		return output;
+	}
+
+	private static double[] getLinksProportions(Network net){
+		double[] output = {0,0};
+		double totalDistance = 0;
+		
+		for (int i = 0 ; i < nVar ; i++){
+			for (int j = i+1 ; j < nVar ; j++){
+				Route r = net.routingTrees[i][j].routes[0];
+				output[0] += distances[r.i.ID][r.k.ID] + distances[r.m.ID][r.j.ID];
+				output[1] += distances[r.k.ID][r.m.ID];
+			}
+		}
+		
+		for (int i = 0 ; i < output.length ; i++ )
+			totalDistance += output[i];
+		
+		for (int i = 0 ; i < output.length ; i++ )
+			output[i] /= totalDistance;
+		
+		return output;
+	}
+	
+	private static double getHubsDispersion(Network net){
+		double output = 0;
+		for (int i : net.hubs)
+			for (int j : net.hubs)
+				output += distances[i][j];
+		return output;
 	}
 }
