@@ -39,7 +39,7 @@ public class RpHND_Exact_Main {
 		String timestamp = new SimpleDateFormat("yyyyMMdd-HH.mm.ss").format(new Date());
 		PrintWriter out = new PrintWriter(new File("results_" + timestamp + ".txt"));
 		
-		int[] SIZE = { 20};
+		int[] SIZE = {10,15,20,25};
 		int[] P = { 3,5,7 };
 		int[] L = { 0,1,2,3};
 		double[] DISCOUNT = { 0.2,0.4,0.6 };
@@ -59,10 +59,9 @@ public class RpHND_Exact_Main {
 							if (l < p){
 								isExact = true;
 								Network net = run(n, p, q, d, l);
-								double[] temp1 = getFlowsProportions(net);
-								double[] temp2 = getLinksProportions(net);
-								double temp3 = getHubsDispersion(net);
-								String consoleOutput = "," + String.format("%.4f", temp1[0]) + "," + String.format("%.4f", temp1[1]) + "," + String.format("%.4f", temp1[2]) + "," + String.format("%.4f", temp2[0]) + "," + String.format("%.4f", temp2[1]) + "," + String.format("%.4f", temp3);
+								double temp1 = getHubsDispersion(net);
+								double temp2 = getFlowsProportions2(net);
+								String consoleOutput = "," + String.format("%.4f", temp1) + "," + String.format("%.4f", temp2);
 								System.out.println(net.results + consoleOutput);
 								out.append(net.results + consoleOutput + "\r\n");
 							}
@@ -99,7 +98,7 @@ public class RpHND_Exact_Main {
 	public static Network run(int N, int p, double q, double d, int l)
 			throws IOException, InterruptedException, GRBException {
 		String result = "";
-		failures = MyArray.read("Datasets/An_Failure/failures.txt");
+		failures = MyArray.read("Datasets/An_Failures/failures.txt");
 		distances = MyArray.read("Datasets/CAB/CAB" + N + "/Distances.txt");
 		nVar = distances.length;
 		flows = MyArray.read("Datasets/CAB/CAB" + N + "/Flows.txt");
@@ -536,6 +535,29 @@ public class RpHND_Exact_Main {
 		return output;
 	}
 	
+	/**
+	 *  returns percentage of flows that go through inter-hub links.
+	 * @param Network
+	 * @return double
+	 */
+	public static double getFlowsProportions2(Network net){
+		double numinator = 0;
+		double denuminator = 0;
+		for ( int i = 0 ; i < nVar ; i++ )
+			for (int j = i+ 1 ; j < nVar ; j++ ){
+				Route r = net.routingTrees[i][j].routes[0];
+				numinator += flows[r.i.ID][r.j.ID] * distances[r.k.ID][r.m.ID];
+				denuminator += flows[r.i.ID][r.j.ID] * ( distances[r.i.ID][r.k.ID] + distances[r.k.ID][r.m.ID] + distances[r.m.ID][r.j.ID] );
+			}
+		return numinator/denuminator;
+	}
+	
+	/**
+	 * return total distances of pair-wise hub distances in a network
+	 *
+	 * @param Network
+	 * @return double
+	 */
 	private static double getHubsDispersion(Network net){
 		double output = 0;
 		for (int i : net.hubs)
